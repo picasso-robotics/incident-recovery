@@ -6,7 +6,7 @@ snakeyaml = "2.2"                 # the version jackson-dataformat-yaml 2.17.2 r
 postgresql = "42.7.4"
 slf4j = "2.0.13"
 junit = "5.10.3"
-testcontainers = "1.20.1"
+testcontainers = "1.21.4"
 springBoot = "3.3.4"
 hikari = "5.1.0"
 
