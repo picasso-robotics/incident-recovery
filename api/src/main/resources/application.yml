@@ -1,5 +1,5 @@
 server:
   port: 18190
   # Loopback by default: the control plane has no authentication, so it must not be reachable from the network
-  # unless an operator opts in with KOSHCHEI_BIND_ADDRESS (e.g. 0.0.0.0).
-  address: ${KOSHCHEI_BIND_ADDRESS:127.0.0.1}
+  # unless an operator opts in with RECOVERY_BIND_ADDRESS (e.g. 0.0.0.0).
+  address: ${RECOVERY_BIND_ADDRESS:127.0.0.1}

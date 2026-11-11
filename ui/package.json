@@ -1,9 +1,9 @@
 {
-  "name": "koshchei-ui",
+  "name": "incident-recovery-ui",
   "private": true,
   "version": "0.3.0",
   "type": "module",
-  "description": "Koshchei Episodes screen (React/TS SPA)",
+  "description": "Incident Recovery Episodes screen (React/TS SPA)",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

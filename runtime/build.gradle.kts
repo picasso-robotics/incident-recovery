@@ -2,11 +2,11 @@ plugins { kotlin("jvm") }
 kotlin { jvmToolchain(21) }
 tasks.test {
     useJUnitPlatform()
-    systemProperty("koshchei.repoRoot", rootProject.projectDir.absolutePath)
-    // R3's history generator runs only when asked: -Dkoshchei.writeReplayHistories=true (design §7.5, plan D-lite).
-    System.getProperty("koshchei.writeReplayHistories")?.let { systemProperty("koshchei.writeReplayHistories", it) }
+    systemProperty("recovery.repoRoot", rootProject.projectDir.absolutePath)
+    // R3's history generator runs only when asked: -Drecovery.writeReplayHistories=true (design §7.5, plan D-lite).
+    System.getProperty("recovery.writeReplayHistories")?.let { systemProperty("recovery.writeReplayHistories", it) }
     // The new set's directory name (default: today's date); an existing set is never overwritten.
-    System.getProperty("koshchei.replaySet")?.let { systemProperty("koshchei.replaySet", it) }
+    System.getProperty("recovery.replaySet")?.let { systemProperty("recovery.replaySet", it) }
 }
 // The Temporal shell around the pure core (design §4.1): workflow, activity interfaces, the Mock narrator.
 dependencies {

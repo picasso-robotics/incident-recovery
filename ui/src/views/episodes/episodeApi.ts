@@ -44,7 +44,7 @@ export async function sendDecision(
   operator: string,
   body?: object,
 ): Promise<string> {
-  const headers: Record<string, string> = { "X-Koshchei-Operator": operator.trim() };
+  const headers: Record<string, string> = { "X-Recovery-Operator": operator.trim() };
   if (body) headers["Content-Type"] = "application/json";
   const res = await fetch(episodePath(instanceId, action), { method: "POST", headers, body: body ? JSON.stringify(body) : undefined });
   return (await json<{ reply: string }>(res)).reply;

@@ -6,7 +6,7 @@ import { EpisodeList } from "./EpisodeList";
 import { NoticeFeed } from "./NoticeFeed";
 import { operatorProblem } from "./episodes";
 
-const OPERATOR_KEY = "koshchei.operator";
+const OPERATOR_KEY = "recovery.operator";
 
 function readOperator(): string {
   try {

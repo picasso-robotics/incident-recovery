@@ -5,11 +5,11 @@ plugins {
 kotlin { jvmToolchain(21) }
 tasks.test {
     useJUnitPlatform()
-    // `-Dkoshchei.updateFixtures=true` regenerates the committed diagnosis-contract fixtures (requests and measurement)
+    // `-Drecovery.updateFixtures=true` regenerates the committed diagnosis-contract fixtures (requests and measurement)
     // and then fails on purpose (see ContractFixtures); rerun without it to verify.
-    systemProperty("koshchei.updateFixtures", System.getProperty("koshchei.updateFixtures") ?: "false")
+    systemProperty("recovery.updateFixtures", System.getProperty("recovery.updateFixtures") ?: "false")
     systemProperty(
-        "koshchei.contractFixturesDir",
+        "recovery.contractFixturesDir",
         layout.projectDirectory.dir("src/test/resources/contract/diagnosis").asFile.absolutePath,
     )
 }
