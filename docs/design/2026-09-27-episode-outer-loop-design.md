@@ -4,6 +4,7 @@
 - 이 문서는 2026-10-05에 koshei 저장소에서 koshchei 저장소로 옮겨 왔으며, 옮겨 온 원본은 koshei 커밋 `6e66dbe`의 것이다. 이 설계와 구현은 koshei의 PR #4(설계, 브랜치 `design/episode-outer-loop`)와 PR #5(구현, 브랜치 `feat/episode-core`)로 들어갔으며, 그때까지의 커밋 이력은 koshei 저장소에 남아 있고 koshchei는 이력을 새로 시작했다.
 - 본문에 나오는 `koshei`는 분리 전의 이름이며, 본문은 역사 기록이라 그 낱말을 고치지 않고 에피소드 쪽 이름(패키지 `koshchei.core` · `koshchei.runtime`, 에피소드가 읽는 환경변수 열여섯 개(`KOSHCHEI_*`), 큐 `koshchei-episode-tq`, DB 역할 `koshchei_rt`, 헤더 `X-Koshchei-Operator`, 정책 파일 `policy/active.yaml`)만 새 이름으로 바꿨다. koshei 자신의 환경변수(예: `KOSHEI_AUTOCORRECT_*`)는 그대로이며, 모듈 이름 `:episode` · `:episode-runtime`은 본문에 옛 이름 그대로 남아 있고 koshchei에서는 `:core` · `:runtime`이다.
 - 본문에는 분리 전 koshei의 이름이 그대로 남아 있다. koshchei에서의 새 이름은 모듈 `:app` → `:host` · `:authoring-api` → `:api`, `authoring-ui`의 「07 Episodes」 탭 → `ui/`의 Episodes 화면, `EpisodeWatcherMain` → `koshchei.host.WatcherKt`, 제어면 포트 18090 → 18190이다. 「함께 읽을 것」에 적힌 `outer-loop-requirements.md`와 `humanoid-ops-agent-architecture.md`는 koshei 저장소에도 koshchei 저장소에도 없다.
+- 2026-11-11에 저장소 이름에 맞춰 위 항목에 적힌 에피소드 쪽 이름을 다시 바꿨으며, 본문은 새 이름(패키지 `dev.picasso.recovery.*`, 환경변수 `RECOVERY_*`, 큐 `incident-recovery-episode-tq`, DB 역할 `incident_recovery_rt`, 헤더 `X-Recovery-Operator`)을 쓴다. 위 두 항목은 2026-10-05의 기록이라 그때 이름을 둔다.
 - 함께 읽을 것
   - 요건 점검표: `outer-loop-requirements.md` (R1~R15)
   - 구성 배경: `humanoid-ops-agent-architecture.md` (3~7절, 8.2~8.6절, 9절 표만 참고)
@@ -26,7 +27,7 @@ LLM 진단(안쪽 루프)은 그 안의 DIAGNOSING 상태에서 한 번 불리�
 - 사가 플랫폼: koshei 의 기존 계약 기반 사가(SagaWorkflow, 블록 계약, 역순 보상)는 운영자가 그린 흐름을 한 번 통과한다. 에피소드는
   되돌아가는 고리와 타이머가 있는 새 워크플로 타입이다(§18). 사가는 버리지 않는다. koshei 가 직접 하는 조치의 실행체로 자식
   워크플로 자리에 남는다. 그 자리는 계획 D 의 것이고 범위 밖이다(§1). 에피소드는 운영자가 그리지 않으므로 엔진 중립 IR 과
-  Conductor 를 거치지 않는다. Temporal 전용이다(§4.1). 에피소드는 기본으로 꺼져 있다(`KOSHCHEI_PICASSO=off`). 그때 기존 사가 워커와
+  Conductor 를 거치지 않는다. Temporal 전용이다(§4.1). 에피소드는 기본으로 꺼져 있다(`RECOVERY_PICASSO=off`). 그때 기존 사가 워커와
   관문 스크립트는 그대로 돈다(§4.2 구현(B3b)).
 - picasso: 로봇 명령의 원천은 picasso 하나다(§2). koshei 는 picasso 의 소비자다. picasso 의 대장을 읽고 승인을 시도한다. picasso 를
   제 프로세스에 세우고 `pump()` 를 돌리는 「담는 쪽」은 koshei 가 아니다(§2).
@@ -43,7 +44,7 @@ LLM 진단(안쪽 루프)은 그 안의 DIAGNOSING 상태에서 한 번 불리�
 - 계획 C2(2026-10-03): picasso ADR 48 을 받았다. 승인 창구 판 4 를 읽고, ResultExport 판 1 을 나르고, 결과 통보로 DONE 을 판정한다
   (§16 C2 끝).
 - 계획 D-lite(2026-10-04): 에이전트 층 끄기 방송, 커밋된 재생 이력, 기록 표의 런타임 역할이 섰다(§16 D-lite 끝).
-- 계획 C3(2026-10-04): 실물 picasso 승인 창구 클라이언트 `HttpApprovalWindow` 가 섰다. `KOSHCHEI_PICASSO=picasso` 로 켠다(§16 C3 끝).
+- 계획 C3(2026-10-04): 실물 picasso 승인 창구 클라이언트 `HttpApprovalWindow` 가 섰다. `RECOVERY_PICASSO=picasso` 로 켠다(§16 C3 끝).
 - 실물 연결은 두 번 돌렸다. 2026-10-03 에 narrator 와 khala 를 거친 진단 한 번, 2026-10-04 에 picasso 의 참조 담는 쪽과 한 번이다(§16).
 
 ### 아직 열린 것
@@ -170,7 +171,7 @@ LLM 진단(안쪽 루프)은 그 안의 한 상태(DIAGNOSING)에서 함수처�
   ├─ picasso 클라이언트 (승인 창구. 조회 표면은 없다 — 대장은 내보내기로 읽는다, §8.3)
   └─ EpisodeWatcherMain                        접수·근거 감시자, 별도 프로세스 (§12)
 
-:app                Worker.kt 에서 EpisodeWorkflowImpl 과 액티비티 구현을 큐 koshchei-episode-tq 에 등록
+:app                Worker.kt 에서 EpisodeWorkflowImpl 과 액티비티 구현을 큐 incident-recovery-episode-tq 에 등록
 :authoring-api      에피소드 조회와 사람 결정 표면(Update 중계). 127.0.0.1 바인딩 (§7.2)
 ```
 
@@ -189,7 +190,7 @@ LLM 진단(안쪽 루프)은 그 안의 한 상태(DIAGNOSING)에서 함수처�
 
 | 프로세스 | 큐 / 표면 | 비고 |
 |---|---|---|
-| koshei 워커 (`:app`) | `koshchei-episode-tq` (에피소드), `koshei-v0_1-tq` (자식 사가) | 두 큐 분리 |
+| koshei 워커 (`:app`) | `incident-recovery-episode-tq` (에피소드), `koshei-v0_1-tq` (자식 사가) | 두 큐 분리 |
 | narrator 워커 (Python) | `narrator-tq` | 동시 실행은 설정값(khala 브리지 한도 이하) |
 | 감시자 (`EpisodeWatcherMain`) | 접수: picasso 내보내기 디렉터리(개발용, §19 C) → signalWithStart / signal · 근거: 담는 쪽이 나른 결과 통보 → `evidence` signal (§12) | 커서는 Postgres. **운반만 한다** |
 | 담는 쪽 (picasso 배치 호스트, **koshei 밖**, 아직 없음) | picasso 인스턴스와 `pump()`, 승인 창구 `POST /approvals`(루프백, 인증 없음), 결과 통보 `pending()` / `ack` | koshei 는 소비자(§2). 자리는 §19 C |
@@ -199,14 +200,14 @@ LLM 진단(안쪽 루프)은 그 안의 한 상태(DIAGNOSING)에서 함수처�
 **구현(B3b).** 등록은 `:episode-runtime` 의 `EpisodeWorkers.register(factory, config, store)` 한 함수가 한다. `:app` 의 `Worker.kt` 는
 `EpisodeRuntimeConfig.fromEnv` 로 환경변수를 시작 때 한 번 읽어 그 함수를 부를 뿐이다(워크플로는 여전히 아무것도 읽지 않는다, §7.5).
 워커 옵션은 사가 워커와 같다(교착 감지 10초).
-- `KOSHCHEI_PICASSO`: 기본은 `off` 다. 에피소드 워커를 띄우지 않고 표도 만들지 않으므로 기존 사가 워커와 관문 스크립트는 그대로다.
+- `RECOVERY_PICASSO`: 기본은 `off` 다. 에피소드 워커를 띄우지 않고 표도 만들지 않으므로 기존 사가 워커와 관문 스크립트는 그대로다.
   `mock` 은 이름으로 골라야 하고, 시작 때 경고 한 줄을 남긴다(§8.3 · §11 의 Mock 은 시험의 것이다). 그 밖의 값은 시작을 멈춘다 —
   실물 승인 창구 클라이언트는 §19 C 뒤다. (C3: `picasso` 가 실물 창구 `HttpApprovalWindow` 다. 설정은 아래 C1 표와 §8.4 구현(C3).)
-- `KOSHCHEI_NARRATOR`: `mock`(기본)이면 koshei 워커가 `MockNarratorActivities` 를 `narrator-tq` 에 등록한다. `remote` 면 등록하지 않고
+- `RECOVERY_NARRATOR`: `mock`(기본)이면 koshei 워커가 `MockNarratorActivities` 를 `narrator-tq` 에 등록한다. `remote` 면 등록하지 않고
   narrator 의 Python 워커가 그 큐를 맡는다. 둘이 한 큐를 함께 폴링하면 어느 쪽이 답할지 모르므로 하나만 켠다.
-- `KOSHCHEI_NARRATOR` · `KOSHCHEI_PICASSO` 에 모르는 값이 있으면 사가 워커까지 워커 전체가 시작 때 멈춘다(빨리 실패). 설정을 잘못 적어
+- `RECOVERY_NARRATOR` · `RECOVERY_PICASSO` 에 모르는 값이 있으면 사가 워커까지 워커 전체가 시작 때 멈춘다(빨리 실패). 설정을 잘못 적어
   에피소드 쪽만 조용히 다르게 도는 일이 없게 한다.
-- `KOSHCHEI_EPISODE_POLICY`: 정책 파일 경로(§8.2). 에피소드 워커가 켜졌는데 그 파일이 없으면 시작 때 경고를 남긴다 — 기본값은 작업
+- `RECOVERY_EPISODE_POLICY`: 정책 파일 경로(§8.2). 에피소드 워커가 켜졌는데 그 파일이 없으면 시작 때 경고를 남긴다 — 기본값은 작업
   디렉터리 기준 상대경로이고, 파일이 없으면 모든 에피소드가 `POLICY_MISSING` 이다.
 - picasso 창구는 `ApprovalWindow`(`revalidate`, `approve`)로 액티비티에 들어간다. 한 인스턴스를 동시에 도는 액티비티들이 함께 쓰므로
   구현은 스레드 안전해야 하고, `approve` 가 받는 의도 노드는 읽기 전용이다. 지금 구현은 `MockPicasso` 하나다. `register` 도 창구를
@@ -216,21 +217,21 @@ LLM 진단(안쪽 루프)은 그 안의 한 상태(DIAGNOSING)에서 함수처�
 
 | 변수 | 뜻 | 기본 |
 |---|---|---|
-| `KOSHCHEI_WATCH_EXPORTS` | picasso 내보내기 디렉터리들. `File.pathSeparator`(Windows `;`, 그 밖 `:`)로 나눈다. 빈 칸은 거절한다 | 필수 |
-| `KOSHCHEI_WATCH_CARRY` | 결과 통보 디렉터리. picasso ResultExport 판 1 의 `job-responses.jsonl` 을 읽는다(§12 구현(C2)). 비었으면 거절한다 | 없음(근거를 나르지 않는다) |
-| `KOSHCHEI_WATCH_INTERVAL_MS` | 폴링 간격. 100 ~ 60000 | 2000 |
-| `KOSHCHEI_EPISODE_POLICY` | 병합 규칙을 읽을 정책 파일. 워커와 같은 파일 | `policy/active.yaml`. `:app:watcher` 는 `:app:run` 처럼 저장소 뿌리의 절대경로를 넣어 준다 |
-| `KOSHCHEI_DB_*` | 커서 · 감시 기록 표. 워커와 같은 DB | `Db.connect()` 기본 |
-| `KOSHCHEI_PICASSO` | 에피소드 모드인가. 워커와 같은 해석(`PicassoMode.fromEnv`). 값은 `off` · `mock` · `picasso`(C3) | `off` 면 시작하지 않는다 |
-| `KOSHCHEI_PICASSO_URL` | (C3, 워커만 읽는다) 실물 창구의 원점. `http://127.0.0.1:<port>` 이거나, IPv4 가 먼저인 루프백으로 풀리는 `localhost` 다. 경로 · 질의 · 조각 · 사용자 정보는 거절한다. `/approvals` 는 클라이언트가 붙인다. 포트는 1 ~ 65535 | `picasso` 면 필수 |
-| `KOSHCHEI_PICASSO_AGENT_ID` | (C3, 워커만 읽는다) POLICY 자동 승인(`approverKind=AGENT`)이 보낼 승인자 id. picasso 가 선언한 id 여야 한다 | `picasso` 면 필수 |
-| `KOSHCHEI_PICASSO_TIMEOUT_MS` | (C3, 워커만 읽는다) 창구 호출 한 번의 한도. 주고받기 전체에 걸린다. `T ≤ (dispatchMs − 3000)/3` 으로 둔다(§8.4 구현(C3)) | 8000 |
+| `RECOVERY_WATCH_EXPORTS` | picasso 내보내기 디렉터리들. `File.pathSeparator`(Windows `;`, 그 밖 `:`)로 나눈다. 빈 칸은 거절한다 | 필수 |
+| `RECOVERY_WATCH_CARRY` | 결과 통보 디렉터리. picasso ResultExport 판 1 의 `job-responses.jsonl` 을 읽는다(§12 구현(C2)). 비었으면 거절한다 | 없음(근거를 나르지 않는다) |
+| `RECOVERY_WATCH_INTERVAL_MS` | 폴링 간격. 100 ~ 60000 | 2000 |
+| `RECOVERY_EPISODE_POLICY` | 병합 규칙을 읽을 정책 파일. 워커와 같은 파일 | `policy/active.yaml`. `:app:watcher` 는 `:app:run` 처럼 저장소 뿌리의 절대경로를 넣어 준다 |
+| `RECOVERY_DB_*` | 커서 · 감시 기록 표. 워커와 같은 DB | `Db.connect()` 기본 |
+| `RECOVERY_PICASSO` | 에피소드 모드인가. 워커와 같은 해석(`PicassoMode.fromEnv`). 값은 `off` · `mock` · `picasso`(C3) | `off` 면 시작하지 않는다 |
+| `RECOVERY_PICASSO_URL` | (C3, 워커만 읽는다) 실물 창구의 원점. `http://127.0.0.1:<port>` 이거나, IPv4 가 먼저인 루프백으로 풀리는 `localhost` 다. 경로 · 질의 · 조각 · 사용자 정보는 거절한다. `/approvals` 는 클라이언트가 붙인다. 포트는 1 ~ 65535 | `picasso` 면 필수 |
+| `RECOVERY_PICASSO_AGENT_ID` | (C3, 워커만 읽는다) POLICY 자동 승인(`approverKind=AGENT`)이 보낼 승인자 id. picasso 가 선언한 id 여야 한다 | `picasso` 면 필수 |
+| `RECOVERY_PICASSO_TIMEOUT_MS` | (C3, 워커만 읽는다) 창구 호출 한 번의 한도. 주고받기 전체에 걸린다. `T ≤ (dispatchMs − 3000)/3` 으로 둔다(§8.4 구현(C3)) | 8000 |
 
 - 상대 경로는 프로세스의 작업 디렉터리 기준으로 풀린다. `:app:watcher` 의 작업 디렉터리는 `app/` 이다. 그래서 시작 줄에 절대 경로를 찍는다.
-- 감시자는 `KOSHCHEI_PICASSO=off` 면 시작하지 않는다. 에피소드 워커가 없으면 감시자가 연 에피소드는 아무도 돌리지도 보지도 않는다 —
+- 감시자는 `RECOVERY_PICASSO=off` 면 시작하지 않는다. 에피소드 워커가 없으면 감시자가 연 에피소드는 아무도 돌리지도 보지도 않는다 —
   `signalWithStart` 는 그래도 워크플로를 만들고, 그것은 워커를 기다리며 서 있다. 증상이 사라지는 것은 아니다.
-- authoring-api 도 이제 `KOSHCHEI_PICASSO` 를 읽는다(drift 의 자동 디스패치를 막는 판정, §14 구현(C1)). 모르는 값이면 워커처럼 시작을 멈춘다.
-- **각 프로세스는 제 환경만 본다.** 워커 · 감시자 · authoring-api 가 같은 `KOSHCHEI_PICASSO` 를 가져야 한다. 다른 셸에서 띄운 authoring-api 는
+- authoring-api 도 이제 `RECOVERY_PICASSO` 를 읽는다(drift 의 자동 디스패치를 막는 판정, §14 구현(C1)). 모르는 값이면 워커처럼 시작을 멈춘다.
+- **각 프로세스는 제 환경만 본다.** 워커 · 감시자 · authoring-api 가 같은 `RECOVERY_PICASSO` 를 가져야 한다. 다른 셸에서 띄운 authoring-api 는
   에피소드 모드를 모르고 drift 를 그대로 디스패치할 수 있다. Gradle 작업은 셸의 `KOSHEI_*` 를 넘기므로 한 셸에서 띄우면 맞는다.
 - 감시자도 시작 때 에피소드 스키마를 돌린다(`EpisodeStore.ensureSchema()`, 멱등, §13). 워커보다 먼저 떠도 된다.
 - 폴링 한 번이 DB 나 파일 시스템 오류로 실패하면 표준 오류에 한 줄을 찍고 다음 간격에 다시 한다. 마지막 커서 행 뒤의 것은 잃지 않는다.
@@ -511,7 +512,7 @@ Update 의 답(`Reply`, 거절도 값)이다. PROPOSED 는 순간 상태라 `Pha
 - 승인과 기한 만료가 겹치면 워크플로 단위 순차 처리로 하나만 먼저 먹는다. 기한이 먼저 먹었으면 뒤늦은 `decide` 는
   `REFUSED_NOT_AWAITING` 값을 받는다. R1 경합 시험의 "둘 중 하나"가 이 규칙으로 정의된다.
 - 제어면 경로: `GET /api/episodes`, `GET /api/episodes/{id}`, `POST /api/episodes/{id}/decide|confirm|takeover|close`.
-- **승인자 신원**: 요청 헤더 `X-Koshchei-Operator` 의 값을 싣고, 기록에 `identityAssurance: SELF_ASSERTED` 를 함께 남긴다. 인증이 없는
+- **승인자 신원**: 요청 헤더 `X-Recovery-Operator` 의 값을 싣고, 기록에 `identityAssurance: SELF_ASSERTED` 를 함께 남긴다. 인증이 없는
   PoC 한계를 감사 기록에도 드러내기 위해서다(picasso 승인 창구도 같은 한계를 스스로 적어 둔다).
 
 **구현(B3c).** 제어면은 `:authoring-api` 의 `EpisodeController` 와 `EpisodeGateway` 다. 읽고 나르기만 하고 판정하지 않는다.
@@ -519,7 +520,7 @@ Update 의 답(`Reply`, 거절도 값)이다. PROPOSED 는 순간 상태라 `Pha
   `POST /api/episodes/{workflowId}/{run}/decide|confirm|takeover|close`. 여기서 `{run}` 은 인스턴스 id 의 뒷부분일 뿐 run id 로 쓰지
   않는다(§7.1). 워크플로 id 는 `ep:<key>` 이고 key 는 `[A-Za-z0-9._:-]+` 다 — 한 마디에 들어가야 하므로 `/` · `;` · `%` · `?` 가
   없다. 지금은 개발용 CLI(아래)가 이것을 지키고, 계획 C 에서 감시자가 지킨다. 제어면은 따로 검사하지 않는다.
-- 신원은 머리글 `X-Koshchei-Operator` 에서만 온다. 앞뒤 공백을 떼고, 없거나 비었거나 128자를 넘으면 400 이다.
+- 신원은 머리글 `X-Recovery-Operator` 에서만 온다. 앞뒤 공백을 떼고, 없거나 비었거나 128자를 넘으면 400 이다.
 - 본문은 Spring 의 매퍼(모르는 칸을 그냥 넘긴다)가 아니라 엄격한 매퍼로 읽는다. 모르는 칸(본문의 `operatorId` · `proposition`
   포함), 두 번 나온 키, 객체 뒤에 남은 토큰, 깃발 자리의 숫자나 글자(불로 바꿔 읽지 않는다)는 모두 400 이다. `decide` 의
   `approve` 와 `confirm` 의 `holds` 는 필수다 — 빠졌거나 철자가 틀린 칸이 거절이나 「안 맞음」으로 읽히지 않게. 본문은 64 KiB 까지만
@@ -552,7 +553,7 @@ Update 의 답(`Reply`, 거절도 값)이다. PROPOSED 는 순간 상태라 `Pha
 - 개발용 CLI(`:app`, `./gradlew :app:cli --args="…"`, 작업 디렉터리는 `app/`)가 위 표의 `symptom` · `agentOff` 를 손으로 보낸다.
   감시자(계획 C)가 아니다.
   - `episode open --export <dir> (--search <searchId> | --incident <incidentId>) [--key <correlationKey>]`: picasso 내보내기 한 벌에서
-    줄 하나를 골라 `koshchei-episode-tq` 에 `signalWithStart(ep:<key>, symptom)` 을 보낸다(id 재사용 `ALLOW_DUPLICATE`, §7.1).
+    줄 하나를 골라 `incident-recovery-episode-tq` 에 `signalWithStart(ep:<key>, symptom)` 을 보낸다(id 재사용 `ALLOW_DUPLICATE`, §7.1).
     `manifest.json` 이 있어야 읽고(§12), 그 `runId` 가 없으면 거절한다. 줄은 글자 그대로 싣고, manifest 는 시작 인자와 signal 양쪽에
     싣는다(§7.1 B3b).
   - `eventId` 는 감시자와 같은 재료다(§12): 탐색 줄 `search:<runId>:<searchId>`, 사건 줄 `incident:<runId>:<digest>`(digest 가 없으면
@@ -699,7 +700,7 @@ false` 가 글자 그대로 있으면 마지막 유효 판으로 돌아가지 �
 거절되거나 읽을 수 없는 판은 제한 쪽으로 푼다: 그 트리에 `agentLayerEnabled` 가 `true` 가 아닌 값으로 있으면 끄고, 지난 `expiresAt` 이 있으면 만료로 보고, 그 밖에는 마지막 유효 판으로 돌되 자동 승인을 멈춘다(사람이 승인한다). 활성 판이 없다고 읽혀도 ESCALATED 보존 기한은 마지막 유효 판의 것을 쓴다. B3 의 YAML 읽개는 중복 키를 거부해야 한다(끄기 스위치가 뒤의 키로 덮이지 않게).
 
 **구현(B3b).**
-- 경로는 `KOSHCHEI_EPISODE_POLICY`, 없으면 작업 디렉터리 기준 `policy/active.yaml` 이다. `:app:run` 은 저장소 뿌리의
+- 경로는 `RECOVERY_EPISODE_POLICY`, 없으면 작업 디렉터리 기준 `policy/active.yaml` 이다. `:app:run` 은 저장소 뿌리의
   절대경로를 넣어 준다. `readPolicy` 는 로컬 액티비티이고 결정 때마다 파일을 새로 읽는다(`PolicyFileReader`).
 - 파일이 없으면 `MISSING` 이다. 1 MiB 를 넘거나, 읽을 수 없거나, 엄격한 YAML 이 아니면 `UNREADABLE` 이다. 그 밖에는 JSON 글자로
   `FOUND` 를 돌려주고, 유효한 판인지는 코어의 `parsePolicy` 가 본다.
@@ -805,9 +806,9 @@ catalog)** 에 선언한다. 항목: 사가 정의 `name@x.y.z`, 값의 출처(�
 - Mock picasso 도 판 4 로 답한다. 인스턴스 id 는 기본이 무작위 `mock-<uuid>` 이고, 시험은 `MockPicasso.INSTANCE`(`mock-instance-1`)를 쓴다.
   소모된 (기체, 주문)의 승인은 탐색 줄이 달라도 `CONSUMED`(소모 기록을 실어)다(picasso 참조 구동기의 `hum-02` 와 같다).
 
-**구현(C3).** 실물 창구 클라이언트는 `HttpApprovalWindow`(`:episode-runtime`)다. `KOSHCHEI_PICASSO=picasso` 면 워커가 이것을 쓴다(§4.2).
+**구현(C3).** 실물 창구 클라이언트는 `HttpApprovalWindow`(`:episode-runtime`)다. `RECOVERY_PICASSO=picasso` 면 워커가 이것을 쓴다(§4.2).
 - 요청은 picasso 의 다섯 칸이다: `approverId`, `approverKind`, `robotId`, `jobOrderId`, `sawSkillTypes`(picasso `ApprovalWire.decode`). 그 밖의 칸은 보내지 않는다.
-- 승인자 id 는 PERSON 이면 운영자의 `decide` 가 적은 id 다. AGENT 면 설정의 `KOSHCHEI_PICASSO_AGENT_ID` 다. PERSON 인데 id 가 없으면 재시도 없는 실패(`BadIntent`)다. 지어내지 않는다.
+- 승인자 id 는 PERSON 이면 운영자의 `decide` 가 적은 id 다. AGENT 면 설정의 `RECOVERY_PICASSO_AGENT_ID` 다. PERSON 인데 id 가 없으면 재시도 없는 실패(`BadIntent`)다. 지어내지 않는다.
 - picasso 는 PERSON 이든 AGENT 든 승인자 id 마다 선언을 찾는다. 선언되지 않은 id 는 `NOT_DECLARED` 다(위 「선언」 행).
 - 200 은 본문을 글자 그대로 돌려준다. 승인이든 거절이든 판 4 의 답이고, 판정은 코어(`judgePicassoAnswer`)가 한다.
 - 그 밖의 상태는 재시도하지 않는다. 종류 `PicassoRequestRefused` 의 재시도 없는 실패다. 같은 요청에는 같은 답이 오기 때문이다.
@@ -820,11 +821,11 @@ catalog)** 에 선언한다. 항목: 사가 정의 `name@x.y.z`, 값의 출처(�
 - 무응답 · 연결 거부 · 시간 초과는 재시도한다(액티비티 시도 셋). 두 번 나감은 picasso 가 막는다(`CONSUMED`, §11).
 - `revalidate` 는 늘 UNKNOWN 이다(§8.3). 그래서 실물 에피소드는 UNKNOWN(PRECONDITION)을 지나고, 사람이 카드의 명제로 전제를 확인해야 디스패치한다.
 - 루프백만 받는다. 창구는 신원을 인증하지 않으므로(picasso §15.3) 승인자 id 를 기계 밖으로 보내지 않는다.
-  - `KOSHCHEI_PICASSO_URL` 은 `http://127.0.0.1:<port>` 이거나, IPv4 가 먼저인 루프백으로 풀리는 `localhost` 다. `[::1]` 은 받지 않는다 — 참조 구동기는 IPv4 루프백에만 붙는다.
+  - `RECOVERY_PICASSO_URL` 은 `http://127.0.0.1:<port>` 이거나, IPv4 가 먼저인 루프백으로 풀리는 `localhost` 다. `[::1]` 은 받지 않는다 — 참조 구동기는 IPv4 루프백에만 붙는다.
   - 포트는 1 ~ 65535 다. 경로 · 질의 · 조각 · 사용자 정보가 있으면 거절한다. `/approvals` 는 클라이언트가 붙인다.
   - 설정 오류의 글은 scheme · 호스트 · 포트만 보인다. 사용자 정보는 되풀이하지 않는다.
   - 프록시를 거치지 않는다(`NO_PROXY`). 넘겨주기(redirect)를 따르지 않는다.
-- 시간 한도 `KOSHCHEI_PICASSO_TIMEOUT_MS`(기본 8000)는 주고받기 전체에 걸린다(`sendAsync(...).get(timeout)`). 머리만 보내고 본문을 멈춘 상대도 한도에서 끊긴다.
+- 시간 한도 `RECOVERY_PICASSO_TIMEOUT_MS`(기본 8000)는 주고받기 전체에 걸린다(`sendAsync(...).get(timeout)`). 머리만 보내고 본문을 멈춘 상대도 한도에서 끊긴다.
 - 한도는 `dispatchMs` 보다 작게 둔다. 액티비티는 `dispatchMs` 안에서 시도 셋, 물러섬 1초 · 2초다. 그래서 `T ≤ (dispatchMs − 3000)/3` 이다(정책 v1 의 30000 이면 9000).
   이 값은 시작 때만 읽으므로 검사하지 않는다.
 
@@ -1174,7 +1175,7 @@ correlation:
 - 읽을 수 없는 후보 — 객체가 아니거나, 모르는 종류이거나, 기체나 주문이 없는 조치 — 는 `UNKNOWN` 으로 재조회된다. 그런 조치의
   승인은 아무것도 소모하지 않고 `NO_PROPOSAL` 이다.
 - 한번 소모된 (기체, 주문)은 프로세스가 사는 동안 어느 탐색 줄로도 다시 서지 않는다. 실물은 더 새 FOUND 줄로 새 제안을 세운다.
-- `KOSHCHEI_PICASSO` 의 기본값은 `off` 다(에피소드 워커 없음, §4.2). `mock` 은 이름으로 골라야 하고, 시작 때 경고를 남긴다. Mock 은
+- `RECOVERY_PICASSO` 의 기본값은 `off` 다(에피소드 워커 없음, §4.2). `mock` 은 이름으로 골라야 하고, 시작 때 경고를 남긴다. Mock 은
   프로세스 메모리라서 워커가 죽으면 소모 기록을 잊고, 그 뒤 재시도는 다시 승인된다. 그래서 끝에서 끝까지 시험의 R2 는 같은 프로세스
   안의 실패만 보인다.
 
@@ -1399,8 +1400,8 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
 **구현(D-lite).** 런타임 역할이 섰다. 스크립트는 `scripts/db-roles.sql` 이다.
 - 소유 계정이 스키마(`episode-schema.sql`)를 먼저 적용한다. 그 뒤 소유 계정으로 스크립트를 돌린다:
   `psql -v ON_ERROR_STOP=1 -v rt_password='…' -U <소유 계정> -d koshei -f scripts/db-roles.sql`.
-- `-v` 값은 셸 이력과 프로세스 목록에 보인다. 버릴 값을 넘기고 진짜 비밀번호는 psql 의 `\password koshchei_rt` 로 정하기를 권한다.
-- 역할은 `koshchei_rt` 다. 이미 있던 역할도 LOGIN · NOSUPERUSER · NOCREATEDB · NOCREATEROLE · NOREPLICATION · NOBYPASSRLS 로
+- `-v` 값은 셸 이력과 프로세스 목록에 보인다. 버릴 값을 넘기고 진짜 비밀번호는 psql 의 `\password incident_recovery_rt` 로 정하기를 권한다.
+- 역할은 `incident_recovery_rt` 다. 이미 있던 역할도 LOGIN · NOSUPERUSER · NOCREATEDB · NOCREATEROLE · NOREPLICATION · NOBYPASSRLS 로
   되돌린다.
 - 역할이 스키마에 `CREATE` 할 수 있으면 스크립트가 거절한다. 그런 역할은 감사 표를 만들고 가질 수 있다. 먼저 `public` 의 `CREATE` 를
   PUBLIC 에서 회수한다(Postgres 15 전에는 PUBLIC 에 있다).
@@ -1414,9 +1415,9 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
     역할이 표를 가져서는 안 된다.
   - 하나라도 없으면: 스키마에 `CREATE` 할 수 있는 계정은 스키마 스크립트를 돌린다. 아니면 「apply episode-schema.sql as the owner first」로
     실패한다.
-- 에피소드 표는 제 로그인으로 연다: `KOSHCHEI_EPISODE_DB_USER` · `KOSHCHEI_EPISODE_DB_PASS`. 없으면 `Db` 의 로그인이다. URL 은 같다. 둘 중
+- 에피소드 표는 제 로그인으로 연다: `RECOVERY_EPISODE_DB_USER` · `RECOVERY_EPISODE_DB_PASS`. 없으면 `Db` 의 로그인이다. URL 은 같다. 둘 중
   하나만 있으면 거절한다.
-- 이 로그인은 워커와 감시자의 `EpisodeStore` · `WatchStore` 에만 쓴다. 워커의 나머지(블록 레지스트리, `workflow_def`)는 `KOSHCHEI_DB_*`
+- 이 로그인은 워커와 감시자의 `EpisodeStore` · `WatchStore` 에만 쓴다. 워커의 나머지(블록 레지스트리, `workflow_def`)는 `RECOVERY_DB_*`
   그대로다 — 같은 연결로 블록 레지스트리를 읽으므로 워커 전체를 런타임 역할로 돌릴 수 없다.
 - 남은 것(범위 밖, §16 D-lite 끝): 제어면(`:authoring-api`)은 에피소드 표를 소유 계정의 풀로 읽는다. 읽기 전용 역할은 뒤의 일이다.
   `ensureSchema` 는 객체 이름만 보고 열은 보지 않는다.
@@ -1439,22 +1440,22 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
 | 끄기 스위치가 기능별 환경변수, 재시작 필요 (`AutoCorrectBean.kt:17`, `RunReconciler.kt:60`, `SoakSupervisorBean.kt:15`) | R5, R6 | 정책 표의 데이터 스위치 (§10.4) |
 | 제어면 한 프로세스에 승인·publish·폐기·스케줄러, 인증 없음 | R14 | 정책 편집을 CLI 로 분리, 제어면은 조회·결정 중계만. **인증 부재는 PoC 한계로 명시**, 기록에 `identityAssurance: SELF_ASSERTED` |
 
-**구현(C1).** drift 행: **에피소드 모드(`KOSHCHEI_PICASSO` ≠ `off`)에서는 drift 가 경보만 한다.** 새 스위치는 없다 — 워커가 이미 읽는
-`KOSHCHEI_PICASSO` 를 authoring-api 도 같은 해석(`PicassoMode.fromEnv`)으로 읽는다. 판정은 `AutoCorrectGate` 하나가 시작 때 한 번 내리고,
+**구현(C1).** drift 행: **에피소드 모드(`RECOVERY_PICASSO` ≠ `off`)에서는 drift 가 경보만 한다.** 새 스위치는 없다 — 워커가 이미 읽는
+`RECOVERY_PICASSO` 를 authoring-api 도 같은 해석(`PicassoMode.fromEnv`)으로 읽는다. 판정은 `AutoCorrectGate` 하나가 시작 때 한 번 내리고,
 20초 스케줄(`AutoCorrectBean`)과 단발 경로(`POST /api/autocorrect/sweep`, `AutoCorrectController`)가 그것을 따른다.
 
 | 설정 | 스케줄 | 단발 경로 |
 |---|---|---|
-| `KOSHCHEI_PICASSO` 가 `off` 거나 없음 | 지금 그대로(`DISABLED=1` 이면 꺼짐, `DISPATCH=1` 이면 디스패치, 아니면 경보만) | 지금 그대로(디스패치) |
+| `RECOVERY_PICASSO` 가 `off` 거나 없음 | 지금 그대로(`DISABLED=1` 이면 꺼짐, `DISPATCH=1` 이면 디스패치, 아니면 경보만) | 지금 그대로(디스패치) |
 | 에피소드 모드 + `KOSHEI_AUTOCORRECT_DISABLED=1` | 꺼짐 | 409 `EPISODE_MODE` |
 | 에피소드 모드 + `KOSHEI_AUTOCORRECT_DISPATCH` 없음 | 경보만 | 409 `EPISODE_MODE` |
 | 에피소드 모드 + `DISPATCH=1`(+ `DISABLED` 아님) | **시작을 멈춘다** — 둘 중 하나가 조용히 지지 않게 | — |
-| `KOSHCHEI_PICASSO` 에 모르는 값 | **시작을 멈춘다**(워커와 같은 해석) | — |
+| `RECOVERY_PICASSO` 에 모르는 값 | **시작을 멈춘다**(워커와 같은 해석) | — |
 
 - `DISABLED=1` 이 `DISPATCH=1` 을 이긴다. 에피소드 모드에서도 둘 다 서 있으면 꺼짐이고 시작한다.
 - 에피소드 모드의 스케줄은 시작 때 「auto-correct: episode mode — alarm only」를 한 줄 남긴다. 경보는 지금처럼 로그로 간다.
-- 관문 스크립트 `scripts/run-fsm-autocorrect-dispatch-gate.sh` 는 `KOSHCHEI_PICASSO=off` 를 밝힌다. authoring-api 의 Gradle 작업은 셸의 `KOSHEI_*` 를
-  넘기므로, `KOSHCHEI_PICASSO=mock` 을 내보낸 셸에서 관문을 돌려도 단발 경로가 409 가 되어 엉뚱하게 실패하지 않는다.
+- 관문 스크립트 `scripts/run-fsm-autocorrect-dispatch-gate.sh` 는 `RECOVERY_PICASSO=off` 를 밝힌다. authoring-api 의 Gradle 작업은 셸의 `KOSHEI_*` 를
+  넘기므로, `RECOVERY_PICASSO=mock` 을 내보낸 셸에서 관문을 돌려도 단발 경로가 409 가 되어 엉뚱하게 실패하지 않는다.
 - drift 를 감시자의 둘째 입력으로 삼는 것(DETECTED 만)은 아직이다. 코어에 증상 종류 `DRIFT` 가 없고, drift 로 연 에피소드의 진단 요청 · 후보
   투영(§9)을 먼저 설계해야 한다(§16 C1 끝).
 
@@ -1504,10 +1505,10 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
 
 **B3b 끝(2026-10-01).** 계획 B 의 실제 액티비티와 배선이 섰다: 파일 정책(§8.2), 기록 표 셋(§13), 멱등 `dispatch`(§8.4),
 Mock picasso(§11), `RECORD_LAG`(§8.5), `:app` 워커 등록(§4.2), 끝에서 끝까지 시험과 재생 시험(§7.5). 계획 B 에 남은 것:
-- 실물 picasso 승인 창구 클라이언트 — §19 C 뒤. 그때까지 `KOSHCHEI_PICASSO` 는 `off` 아니면 `mock` 이다. (C3: 이제 `picasso` 도 있다.)
+- 실물 picasso 승인 창구 클라이언트 — §19 C 뒤. 그때까지 `RECOVERY_PICASSO` 는 `off` 아니면 `mock` 이다. (C3: 이제 `picasso` 도 있다.)
 - B3c 제어면 — `/api/episodes…` 와 알림 표를 읽는 화면.
 
-**B3c(API·CLI) 끝(2026-10-02).** 제어면 `/api/episodes…` 가 섰다: 목록과 상세(§7.3), 운영자 카드(§9.5), `X-Koshchei-Operator` 아래의
+**B3c(API·CLI) 끝(2026-10-02).** 제어면 `/api/episodes…` 가 섰다: 목록과 상세(§7.3), 운영자 카드(§9.5), `X-Recovery-Operator` 아래의
 결정 넷(§7.2), 알림 흐름(§8.5). 개발용 CLI `episode open` · `episode agent-off`(§7.2)도 섰다. 코어에는 `REFUSED_NO_PROPOSITION`
 (§7.2, §8.3)이 더해졌다. 계획 B 에 남은 것:
 - 실물 picasso 승인 창구 클라이언트 — 그대로 §19 C 뒤. (C3: 섰다 — `HttpApprovalWindow`)
@@ -1531,10 +1532,10 @@ drift 경보만(§14, §18). 커밋은 `f885319..83f2408`(계획 문서 뒤 열�
 
 계획 C 에 남은 것:
 - 실물 picasso 승인 창구 클라이언트(§19 C). 창구의 판 올림은 C2 로 끝났다 — koshei 는 판 `"4"` 를 읽는다(§8.4 구현(C2)). 클라이언트는
-  남는다. 그때까지 `KOSHCHEI_PICASSO` 는 `off` 아니면 `mock` 이다. (C3: 이제 `picasso` 도 있다.)
+  남는다. 그때까지 `RECOVERY_PICASSO` 는 `off` 아니면 `mock` 이다. (C3: 이제 `picasso` 도 있다.)
 - drift 를 감시자의 둘째 입력으로 — 코어에 증상 종류 `DRIFT` 와 drift 로 연 에피소드의 진단 요청 · 후보 투영(§9)이 먼저 필요하다.
 - 결과 통보를 나르는 모양 — C2 로 끝났다. picasso ResultExport 판 1 이고 줄이 `executionId` 를 든다(§12 구현(C2)). 실물 담는 쪽은 남는다(§19 C).
-- 제어면의 503 사유(`EpisodeController` 의 「no episode worker has run (KOSHCHEI_PICASSO)」)는 이제 감시자가 먼저 떠도 풀린다 — 감시자도 표를
+- 제어면의 503 사유(`EpisodeController` 의 「no episode worker has run (RECOVERY_PICASSO)」)는 이제 감시자가 먼저 떠도 풀린다 — 감시자도 표를
   만든다(소유 계정일 때). 글을 고칠지는 계획 D 에서 본다. (범위 밖이다 — D-lite 에서 뺌, 2026-10-04.)
 - 감시 기록(`episode_watch_log`)을 화면에 보이기, 애매한 병합의 서로 참조를 에피소드 기록에 붙이기 — 계획 D. (범위 밖이다 — D-lite 에서 뺌, 2026-10-04.)
 
@@ -1554,7 +1555,7 @@ drift 경보만(§14, §18). 커밋은 `f885319..83f2408`(계획 문서 뒤 열�
 
 **실물 진단 끝까지 한 번(2026-10-03 UTC, 사용자 승인).** narrator 의 제안(그쪽 `correspondence/TO-KOSHEI-2026-10-03-끝까지-한-번.md`)으로
 koshei 워크플로부터 khala 까지 진단을 한 번 돌렸다.
-- 구성: 공용 Temporal 에 koshei 워커(`feat/episode-core` `ae64ac9`, `KOSHCHEI_NARRATOR=remote`, `KOSHCHEI_PICASSO=mock`, 정책 v1). narrator 의
+- 구성: 공용 Temporal 에 koshei 워커(`feat/episode-core` `ae64ac9`, `RECOVERY_NARRATOR=remote`, `RECOVERY_PICASSO=mock`, 정책 v1). narrator 의
   Python 워커(`python -m diagnose.worker`, 판 `93b0dd0`, 동시 수 1)가 `narrator-tq` 의 유일한 폴러였다.
 - 연 줄: picasso `handoff/narrator/run-1` 의 탐색 줄 `search-1`(hum-02, PATROL-1, FOUND). 개발 CLI `episode open` 으로 열었다.
 - 시각: 열기 15:04:08Z → 진단 요청 15:04:13Z(병합 창 5초) → 결과 15:08:28Z. 진단 한 시도가 255.5초(첫 시도)였다.
@@ -1569,7 +1570,7 @@ koshei 워크플로부터 khala 까지 진단을 한 번 돌렸다.
 - `:episode-runtime`: `AgentOffBroadcast`(`646e342`), 원인을 `failed` 에 싣고 시험이 `AGENT_LAYER_OFF` 와 종류 거르개를 붙듦(`63293e5`),
   원인 사슬을 많아야 열여섯 단계(`c4c08c8`). R3 재생 이력과 `CommittedReplayTest`(`6545223`, `e8f7ced`).
 - `:app`: CLI `episode agent-off --all`(`da8ee3a`).
-- 런타임 역할: `scripts/db-roles.sql` 과 `KOSHCHEI_EPISODE_DB_*`(`4d0039e`), 소유로 정하는 `ensureSchema` · 만들 수 있는 역할 거절 ·
+- 런타임 역할: `scripts/db-roles.sql` 과 `RECOVERY_EPISODE_DB_*`(`4d0039e`), 소유로 정하는 `ensureSchema` · 만들 수 있는 역할 거절 ·
   그 역할로 도는 저장소 시험(`26a8c8f`).
 - 시험(`KOSHEI_*` 없이, Testcontainers 와 `TestWorkflowEnvironment` 만, 머리 `26a8c8f`): `:episode` 323, `:episode-runtime` 290(건너뜀 1 —
   재생 이력 생성기), `:authoring-api` 146, `:app` 41, 모두 통과.
@@ -1587,7 +1588,7 @@ koshei 워크플로부터 khala 까지 진단을 한 번 돌렸다.
   - `ensureSchema` 는 객체 이름만 보고 열은 보지 않는다.
   - R3 에는 DISPATCH_PENDING · REVALIDATING 에서 멈춘 이력이 없다.
 
-**C3 끝(2026-10-04).** koshei 가 실물 picasso 승인 창구(`POST /approvals`)를 부른다(`KOSHCHEI_PICASSO=picasso`, §8.4 구현(C3)).
+**C3 끝(2026-10-04).** koshei 가 실물 picasso 승인 창구(`POST /approvals`)를 부른다(`RECOVERY_PICASSO=picasso`, §8.4 구현(C3)).
 계획 문서는 `a3031a6` 이다.
 - 설정: `PicassoMode.PICASSO` 와 `PicassoWindowConfig`(`aafec68`).
 - 클라이언트: `HttpApprovalWindow`(`6938a3a`).
@@ -1605,7 +1606,7 @@ koshei 워크플로부터 khala 까지 진단을 한 번 돌렸다.
 실물 연결 한 번(2026-10-04 09:04 ~ 09:08 UTC 무렵).
 - 상대는 picasso 의 참조 담는 쪽이다(`runApprovalHost`, 인스턴스 `mw-d64d9b5b-3b53-492b-9398-917483803bcd`, picasso main `3d6530a`).
   선언은 scratch 의 복사본이다. 승인자 `op-c3` 를 hum-02 / `pick_place` 에 더했다. picasso 저장소에는 쓰지 않았다.
-- koshei 워커는 `KOSHCHEI_PICASSO=picasso` 와 Mock narrator 로 돌았다. 감시자는 구동기의 살아 있는 내보내기 디렉터리(대장과
+- koshei 워커는 `RECOVERY_PICASSO=picasso` 와 Mock narrator 로 돌았다. 감시자는 구동기의 살아 있는 내보내기 디렉터리(대장과
   `job-responses.jsonl`)를 보았다. 정책은 v1 이다.
 - 사람의 걸음은 컨테이너의 Temporal CLI 로 보냈다(`temporal workflow update execute --name decide|confirm --input-file`).
 - 감시자는 병합 규칙으로 (기체, 주문)마다 하나씩 에피소드 넷을 열었다.
@@ -1717,7 +1718,7 @@ koshei 워크플로부터 khala 까지 진단을 한 번 돌렸다.
   끝낼 수 없는 시도(실행이 두 번 주어짐)에만 바로 낸다. 담는 쪽이 없거나 통보가 오지 않으면 `evidenceMs` 뒤 `EVIDENCE_EXPIRED` 로 사람에게 간다.
 - **에피소드 모드에서는 단발 `POST /api/autocorrect/sweep` 도 409 다 (C1).** §14 는 「자동 디스패치 끔」만 말한다. 단발 경로는 운영자의
   명시적 행동이지만 늘 디스패치한다. 에피소드 모드에서 열어 두면 에피소드 밖에서 조치가 나가는 두 번째 길이 된다. 그래서 답은 409
-  `EPISODE_MODE` 다. 관문 스크립트는 `KOSHCHEI_PICASSO=off` 를 밝혀 그대로 돈다(§14 구현(C1)).
+  `EPISODE_MODE` 다. 관문 스크립트는 `RECOVERY_PICASSO=off` 를 밝혀 그대로 돈다(§14 구현(C1)).
 
 ---
 

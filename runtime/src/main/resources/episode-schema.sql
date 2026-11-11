@@ -1,7 +1,7 @@
--- Episode audit and channel tables (design §8.5, §13). koshchei owns its database; applied by the owner account, never dropped.
+-- Episode audit and channel tables (design §8.5, §13). incident-recovery owns its database; applied by the owner account, never dropped.
 -- Safe to run at every worker start. Append-only by use: the runtime role of scripts/db-roles.sql has SELECT
 -- and INSERT only (plan D-lite), and does not run this script: EpisodeStore.ensureSchema only checks the objects below
--- (keep its list in step); nothing in koshchei updates or deletes a row.
+-- (keep its list in step); nothing in incident-recovery updates or deletes a row.
 -- CREATE TABLE IF NOT EXISTS never alters a table that is already there: a later column change must be its own
 -- ALTER TABLE … ADD COLUMN IF NOT EXISTS (and likewise for constraints), or existing databases keep the old shape.
 

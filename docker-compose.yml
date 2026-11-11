@@ -1,15 +1,15 @@
-# koshchei's own Postgres. Temporal is shared by default (localhost:7233, the server narrator's worker and picasso use);
+# incident-recovery's own Postgres. Temporal is shared by default (localhost:7233, the server narrator's worker and picasso use);
 # `docker compose --profile temporal up -d` starts a private one only when nothing else holds 7233.
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: koshchei
-      POSTGRES_USER: koshchei
-      POSTGRES_PASSWORD: koshchei
+      POSTGRES_DB: incident_recovery
+      POSTGRES_USER: incident_recovery
+      POSTGRES_PASSWORD: incident_recovery
     ports: ["15433:5432"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U koshchei -d koshchei"]
+      test: ["CMD-SHELL", "pg_isready -U incident_recovery -d incident_recovery"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -19,8 +19,8 @@ services:
     environment:
       DB: postgres12
       DB_PORT: 5432
-      POSTGRES_USER: koshchei
-      POSTGRES_PWD: koshchei
+      POSTGRES_USER: incident_recovery
+      POSTGRES_PWD: incident_recovery
       POSTGRES_SEEDS: postgres
     ports: ["7233:7233"]
     depends_on:

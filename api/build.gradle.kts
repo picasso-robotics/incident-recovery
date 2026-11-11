@@ -6,7 +6,7 @@ plugins {
 kotlin { jvmToolchain(21) }
 tasks.test {
     useJUnitPlatform()
-    systemProperty("koshchei.repoRoot", rootProject.projectDir.absolutePath)
+    systemProperty("recovery.repoRoot", rootProject.projectDir.absolutePath)
 }
 dependencies {
     implementation(project(":runtime"))
@@ -19,7 +19,7 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(libs.temporal.testing)
 }
-application { mainClass.set("koshchei.api.KoshcheiApiApplicationKt") }
+application { mainClass.set("dev.picasso.recovery.api.RecoveryApiApplicationKt") }
 tasks.named<JavaExec>("run") {
-    System.getenv().filterKeys { it.startsWith("KOSHCHEI_") }.forEach { (k, v) -> environment(k, v) }
+    System.getenv().filterKeys { it.startsWith("RECOVERY_") }.forEach { (k, v) -> environment(k, v) }
 }

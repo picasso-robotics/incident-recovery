@@ -135,7 +135,7 @@ test("Episodes: approve sends one POST with the operator in the header and no op
 
   const post = await onePost(page, calls);
   expect(post.path).toBe(P + "/decide");
-  expect(post.headers["x-koshchei-operator"]).toBe("op-1");
+  expect(post.headers["x-recovery-operator"]).toBe("op-1");
   expect(post.body).toEqual({ proposalId: ID + "#1", sawCandidatesVersion: VERSION, approve: true });
   expect(post.body).not.toHaveProperty("operatorId");
 });

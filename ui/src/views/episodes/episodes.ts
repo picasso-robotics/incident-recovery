@@ -93,7 +93,7 @@ export function remainingText(deadlineMillis: number | null, now: number = Date.
   return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 }
 
-/** Why a name cannot be sent as X-Koshchei-Operator, or null (design §7.2: trimmed, 1..128; an HTTP header is ASCII). */
+/** Why a name cannot be sent as X-Recovery-Operator, or null (design §7.2: trimmed, 1..128; an HTTP header is ASCII). */
 export function operatorProblem(name: string): string | null {
   const t = name.trim();
   if (!t) return "운영자 이름이 필요함 · operator name required";

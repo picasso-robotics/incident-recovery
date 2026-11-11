@@ -1,4 +1,4 @@
-# koshchei — 세션이 먼저 읽을 것
+# incident-recovery — 세션이 먼저 읽을 것
 
 ## README 와 그림
 

@@ -6,7 +6,7 @@ import { test as setup, expect } from "@playwright/test";
 // recorded spec does not capture a blank cold-start frame.
 setup("warm up vite dev server", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("body")).toContainText(/Koshchei|Episodes/i, {
+  await expect(page.locator("body")).toContainText(/Incident Recovery|Episodes/i, {
     timeout: 60_000,
   });
 });
