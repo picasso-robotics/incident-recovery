@@ -1,5 +1,6 @@
 package dev.picasso.recovery.runtime
 
+import dev.picasso.recovery.core.Snapshot
 import java.nio.file.Path
 
 /** The two line kinds of a picasso export (design §12). [name] is the `SymptomSignal.kind`. */
@@ -14,15 +15,26 @@ enum class ExportKind(val file: BundleFile) {
  */
 object ExportSymptoms {
     /**
-     * picasso `LedgerExport.SCHEMA_VERSION`s this reader knows: "5" (picasso `8ab5400`) and "6" (picasso `8f0cc04`, same
-     * incident-line fields; a SIGNAL route and a new digest shape, neither of which this reader interprets). The same list
-     * as the diagnosis snapshot's ([dev.picasso.recovery.core.Snapshot.SCHEMA_VERSIONS]).
+     * picasso `LedgerExport.SCHEMA_VERSION`s this reader knows: "5" (picasso `8ab5400`), "6" (picasso `8f0cc04`, same
+     * incident-line fields; a SIGNAL route and a new digest shape, neither of which this reader interprets) and "7"
+     * (picasso `fde49d1`, same fields; two more `resolution.decision` values, checked by [read]). The same list as the
+     * diagnosis snapshot's ([Snapshot.SCHEMA_VERSIONS]).
      */
-    val SCHEMA_VERSIONS = setOf("5", "6")
+    val SCHEMA_VERSIONS = Snapshot.SCHEMA_VERSIONS
 
-    /** Incidents first, then searches: the order picasso writes them, and the order the watcher sends them. */
-    fun read(dir: Path): BundleRead =
-        Bundles.read(dir, "runId", SCHEMA_VERSIONS, ExportKind.entries.map { it.file })
+    /**
+     * Incidents first, then searches: the order picasso writes them, and the order the watcher sends them. A bundle whose
+     * incident line carries a `resolution.decision` its schema cannot carry ([Snapshot.DECISIONS]) is broken: the
+     * format changed under a known version, and no episode could diagnose that line anyway.
+     */
+    fun read(dir: Path): BundleRead {
+        val read = Bundles.read(dir, "runId", SCHEMA_VERSIONS, ExportKind.entries.map { it.file })
+        if (read !is BundleRead.Ready) return read
+        val schema = strictJson.readTree(read.manifestJson).path("schemaVersion").textValue()
+        val strange = Snapshot.unknownDecisions(schema, read.lines[ExportKind.INCIDENT.file.name].orEmpty().map { it.node })
+        return if (strange.isEmpty()) read
+        else BundleRead.Broken("${ExportKind.INCIDENT.file.name} in $dir: schema $schema carries resolution.decision ${Snapshot.DECISIONS[schema]}, was $strange")
+    }
 
     /** `search:<runId>:<searchId>`, `incident:<runId>:<digest>`. Null for an incident without a digest: never guessed. */
     fun eventId(kind: ExportKind, runId: String, line: BundleLine): String? = when (kind) {

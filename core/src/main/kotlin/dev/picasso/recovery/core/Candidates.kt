@@ -134,6 +134,9 @@ fun projectCandidates(snapshot: Snapshot, unknowns: List<Unknown>): List<Candida
     }
     for (i in snapshot.incidents) {
         val unresolved = i.get("unresolved")?.let { it.isBoolean && it.booleanValue() } ?: false
+        // Any judgement or step a person already put on the unit — REWORK, CONFIRM_DONE, and since export schema 7
+        // OPERATOR_CANCEL or REMEDY_APPLIED — means no decision is offered. REMEDY_APPLIED is not "recovered": a person
+        // put a remedy in front of the unit, and what came of it arrives as later lines; a person checks (ESCALATE).
         val undecided = i.get("resolution")?.isNull ?: true
         // Only a unit the equipment MATCHED has grounds for either decision: picasso's resolve raises the evidence
         // only then, and deciding DONE on an unmatched unit risks a missing part. Otherwise a person checks on site

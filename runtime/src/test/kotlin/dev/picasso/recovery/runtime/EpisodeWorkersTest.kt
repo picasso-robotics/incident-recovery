@@ -56,10 +56,10 @@ class EpisodeWorkersTest {
 
     @Test fun `picasso names the real approval window - a loopback URL and an agent id are required`() {
         val c = EpisodeRuntimeConfig.fromEnv(mapOf(
-            "RECOVERY_PICASSO" to "picasso", "RECOVERY_PICASSO_URL" to "http://127.0.0.1:8770", "RECOVERY_PICASSO_AGENT_ID" to "narrator-1",
+            "RECOVERY_PICASSO" to "picasso", "RECOVERY_PICASSO_URL" to "http://127.0.0.1:8770", "RECOVERY_PICASSO_AGENT_ID" to "recovery-1",
         ))
         assertEquals(PicassoMode.PICASSO, c.picasso)
-        assertEquals(PicassoWindowConfig(java.net.URI("http://127.0.0.1:8770/approvals"), "narrator-1", 8_000), c.window)
+        assertEquals(PicassoWindowConfig(java.net.URI("http://127.0.0.1:8770/approvals"), "recovery-1", 8_000), c.window)
         val viaLocalhost = EpisodeRuntimeConfig.fromEnv(mapOf(
             "RECOVERY_PICASSO" to "picasso", "RECOVERY_PICASSO_URL" to "http://localhost:8770/", "RECOVERY_PICASSO_AGENT_ID" to "a",
             "RECOVERY_PICASSO_TIMEOUT_MS" to "15000",

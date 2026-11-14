@@ -20,9 +20,9 @@ class MockApprovalClientTest {
 
     private fun answer(text: String) = json.readTree(text)
 
-    @Test fun `the first approval of a proposal is APPROVED in picasso's schema 4 with the steps that went out`() {
+    @Test fun `the first approval of a proposal is APPROVED in picasso's schema 5 with the steps that went out`() {
         val a = answer(MockApprovalClient(MockApprovalClient.INSTANCE).approve(intent(remedy()), "PERSON"))
-        assertEquals("4", a["schemaVersion"].textValue())
+        assertEquals("5", a["schemaVersion"].textValue())
         assertEquals(MockApprovalClient.INSTANCE, a["instanceId"].textValue())
         assertEquals("APPROVED", a["outcome"].textValue())
         assertEquals("mock-exec-1", a["executionId"].textValue())
@@ -114,9 +114,9 @@ class MockApprovalClientTest {
     }
 
     // The core's reader of these answers (judgePicassoAnswer) is internal to :core and has no public entry point, so
-    // each answer shape is held to the exact field set that reader needs (picasso ApprovalWire schema 4).
+    // each answer shape is held to the exact field set that reader needs (picasso ApprovalWire schema 5).
 
-    @Test fun `an APPROVED answer has exactly picasso's schema-4 fields - an execution and a unit per step`() {
+    @Test fun `an APPROVED answer has exactly picasso's schema-5 fields - an execution and a unit per step`() {
         val a = answer(MockApprovalClient().approve(intent(remedy()), "PERSON"))
         assertEquals(setOf("schemaVersion", "contractSemver", "instanceId", "outcome", "executionId", "steps"), a.fieldNames().asSequence().toSet())
         assertEnvelope(a, "APPROVED")
@@ -127,15 +127,16 @@ class MockApprovalClientTest {
         assertTrue(step["unitId"].isTextual && step["skillType"].isTextual && step["parameters"].isObject)
     }
 
-    @Test fun `a CONSUMED answer has exactly picasso's schema-4 fields - with the consumption record`() {
+    @Test fun `a CONSUMED answer has exactly picasso's schema-5 fields - with the consumption record and its null target`() {
         val picasso = MockApprovalClient()
         picasso.approve(intent(remedy()), "PERSON")
         val a = answer(picasso.approve(intent(remedy()), "PERSON"))
         assertRefusal(a, "CONSUMED")
-        assertEquals(setOf("approverId", "approverKind", "at", "wallClockAt", "executionId", "steps"), a["consumed"].fieldNames().asSequence().toSet())
+        assertEquals(setOf("approverId", "approverKind", "at", "wallClockAt", "executionId", "steps", "target"), a["consumed"].fieldNames().asSequence().toSet())
+        assertTrue(a["consumed"]["target"].isNull, "an order approval's consumption")
     }
 
-    @Test fun `a NO_PROPOSAL answer has exactly picasso's schema-4 fields - consumed is null`() {
+    @Test fun `a NO_PROPOSAL answer has exactly picasso's schema-5 fields - consumed is null`() {
         val a = answer(MockApprovalClient().approve(intent("""{"candidateId":"c","kind":"APPROVE_REMEDY","ref":{},"sawSkillTypes":["pick_place"]}"""), "PERSON"))
         assertRefusal(a, "NO_PROPOSAL")
         assertTrue(a["consumed"].isNull)

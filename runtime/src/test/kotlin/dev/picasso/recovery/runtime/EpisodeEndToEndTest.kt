@@ -55,9 +55,13 @@ class EpisodeEndToEndTest {
         eventually { store.notices(waiting.instanceId).takeIf { n -> n.any { "APPROVAL_NEEDED" in it } } }   // the person was told
     }
 
-    @Test fun `policy v1 - the schema 6 sample opened as the CLI opens it reaches the same dispatch`() {
+    @Test fun `policy v1 - the schema 6 sample opened as the CLI opens it reaches the same dispatch`() = sampleReachesDispatch("schema-6")
+
+    @Test fun `policy v1 - the schema 7 sample opened as the CLI opens it reaches the same dispatch`() = sampleReachesDispatch("schema-7")
+
+    private fun sampleReachesDispatch(schema: String) {
         val e = start(v1)
-        val sample = Path.of(checkNotNull(javaClass.getResource("/picasso/schema-6/run-1/manifest.json")).toURI()).parent
+        val sample = Path.of(checkNotNull(javaClass.getResource("/picasso/$schema/run-1/manifest.json")).toURI()).parent
         val export = assertIs<BundleRead.Ready>(ExportSymptoms.read(sample))
         val line = export.lines.getValue(ExportKind.SEARCH.file.name).single { it.id == "search-1" }
         val ep = client.openEpisode(symptom = ExportSymptoms.symptom(ExportKind.SEARCH, export, line, 0)!!,
