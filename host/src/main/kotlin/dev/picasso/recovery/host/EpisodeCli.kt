@@ -25,8 +25,9 @@ data class OpenSymptom(val workflowId: String, val start: EpisodeStart, val sign
  *
  * Whatever cannot be read is refused with [IllegalArgumentException], never guessed (design §12). The export is read
  * through [ExportSymptoms], as the watcher reads it, so a line the CLI sends is a line the watcher would send, with the
- * same `eventId`. So the manifest needs `schemaVersion "5"` and `counts`; lines past `counts` are not read; and one
- * line that cannot be read in either jsonl file blocks the open — a broken incident line blocks a `--search` too. JSON
+ * same `eventId`. So the manifest needs a known `schemaVersion` ("5", "6" or "7") and `counts`; lines past `counts` are
+ * not read; and one line that cannot be read in either jsonl file (or carries a decision its schema cannot carry) blocks
+ * the open — a broken incident line blocks a `--search` too. JSON
  * is read as strictly as the core reads it (duplicate keys refused). What cannot be read is refused, not skipped.
  */
 object EpisodeCli {

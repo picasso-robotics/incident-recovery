@@ -3,23 +3,57 @@ package dev.picasso.recovery.core
 import com.fasterxml.jackson.databind.JsonNode
 import java.time.Instant
 
-/** The approval window's wire schema this module reads (picasso `ApprovalWire.SCHEMA_VERSION`, ADR 48, main 3d6530a). */
-const val PICASSO_APPROVAL_SCHEMA = "4"
+/**
+ * The approval window's wire schema picasso answers in now (picasso `ApprovalWire.SCHEMA_VERSION`, §15.320, main fde49d1):
+ * what the mock answers in. Schema "4" (ADR 48, main 3d6530a) is still read, see [PICASSO_APPROVAL_SCHEMAS].
+ */
+const val PICASSO_APPROVAL_SCHEMA = "5"
+
+/**
+ * The approval window's wire schemas this module reads: "4" (ADR 48, main 3d6530a) and "5" (§15.320, main fde49d1). An
+ * older picasso still answers "4", and the committed replay histories hold "4" answers. "5" adds one refusal value
+ * (HUMAN_APPROVAL_REQUIRED) and a `target` field in the consumption record (null for an order approval's consumption,
+ * `orderVersion`·`unitId`·`attempt` for a hold recovery's); every other field is as in "4". Any other schema is not
+ * understood and goes to a person (design §8.4).
+ */
+val PICASSO_APPROVAL_SCHEMAS: Set<String> = setOf("4", "5")
 
 /**
  * Every refusal value of the approval window's schema "4" (picasso `ApprovalRefusal`, `docs/orchestration.md` §7.3, read
- * at picasso main 3d6530a): schema 2's fifteen and CONSUMED (ADR 46). A value outside this set is not understood and
- * goes to a person (design §8.4).
+ * at picasso main 3d6530a): schema 2's fifteen and CONSUMED (ADR 46).
  */
-val PICASSO_REFUSALS: Set<String> = setOf(
+private val SCHEMA_4_REFUSALS: Set<String> = setOf(
     "WITHHELD", "NO_PROPOSAL", "CONSUMED", "PROPOSAL_CHANGED", "NOT_DECLARED", "REVOKED", "EXPIRED", "ROBOT_OUT_OF_SCOPE",
     "SKILL_OUT_OF_SCOPE", "VALUE_NOT_DECLARED", "OBJECT_NOT_OBSERVED", "DECLARED_CONTRADICTS_OBSERVED",
     "CAPABILITY_UNKNOWN", "VALUES_NOT_ACCEPTED", "REFUSED_BY_GATE", "REMEDY_NOT_APPLIED",
 )
 
 /**
+ * The refusal values each schema can carry. Schema "5" adds HUMAN_APPROVAL_REQUIRED (picasso §15.320, read at main
+ * fde49d1): the proposal is a recovery for a unit a robot refused after the order was accepted, and only a person may
+ * approve it, at picasso's own recovery entrance (`Middleware.approveRecovery`) — never through `POST /approvals`, whoever
+ * the approver claims to be. Retrying gives the same answer, so it is an ordinary refusal: ESCALATED
+ * (`DISPATCH_REFUSED`), the person's path. A value outside its schema's set — HUMAN_APPROVAL_REQUIRED in a "4" answer
+ * included — is not understood and goes to a person (design §8.4).
+ */
+private val REFUSALS_BY_SCHEMA: Map<String, Set<String>> = mapOf(
+    "4" to SCHEMA_4_REFUSALS,
+    "5" to SCHEMA_4_REFUSALS + "HUMAN_APPROVAL_REQUIRED",
+)
+
+/** Every refusal value of the newest schema ([PICASSO_APPROVAL_SCHEMA]): schema 4's sixteen and HUMAN_APPROVAL_REQUIRED. */
+val PICASSO_REFUSALS: Set<String> = REFUSALS_BY_SCHEMA.getValue(PICASSO_APPROVAL_SCHEMA)
+
+/**
  * Refusals that fold "my earlier attempt may already have landed" (design §11): UNKNOWN(OUTCOME), never a retry.
  * CONSUMED is read the same way: its record names who consumed the proposal, but incident-recovery does not narrow on it (§19 B).
+ * Its schema-5 `target` is not read either: it stays in the answer the DISPATCH_RESULT record keeps verbatim.
+ *
+ * Since picasso §15.319 (main 2917187) NO_PROPOSAL also answers a FOUND search whose robot another execution holds — no
+ * proposal ever stood — and REMEDY_NOT_APPLIED also answers an approval for a job order its execution host withdrew
+ * (mission-ops B3: the order's end, nothing is built) or a hold recovery whose target is gone. The answer does not tell
+ * these apart from "already landed" except in the prose `reason`, which is never read; so they fold the same way, and no
+ * retry follows either.
  */
 private val MAY_HAVE_LANDED = setOf("NO_PROPOSAL", "REMEDY_NOT_APPLIED", "CONSUMED")
 
@@ -73,9 +107,9 @@ internal fun judgeDispatch(kind: CandidateKind, result: DispatchResult): Dispatc
 }
 
 /**
- * Reads the approval window's answer (design §8.4): `schemaVersion` first, then `instanceId` (every schema-4 answer
- * carries it), then `outcome`; branches on the `refusal` value only, never on the prose `reason`. Read with the module's
- * strict mapper, so a duplicated key is not understood.
+ * Reads the approval window's answer (design §8.4): `schemaVersion` first, then `instanceId` (every schema-4 and schema-5
+ * answer carries it), then `outcome`; branches on the `refusal` value only — checked against that schema's own values —
+ * never on the prose `reason`. Read with the module's strict mapper, so a duplicated key is not understood.
  */
 internal fun judgePicassoAnswer(json: String): DispatchJudgement {
     val node = try {
@@ -85,7 +119,8 @@ internal fun judgePicassoAnswer(json: String): DispatchJudgement {
     }
     if (node == null || !node.isObject) return DispatchJudgement.AnswerUnknown("not a JSON object")
     val schema = node.text("schemaVersion")
-    if (schema != PICASSO_APPROVAL_SCHEMA) return DispatchJudgement.AnswerUnknown("schemaVersion $schema")
+    if (schema !in PICASSO_APPROVAL_SCHEMAS) return DispatchJudgement.AnswerUnknown("schemaVersion $schema")
+    val refusals = REFUSALS_BY_SCHEMA.getValue(schema!!)
     val instanceId = node.text("instanceId")?.takeIf { it.isNotBlank() }
         ?: return DispatchJudgement.AnswerUnknown("no instanceId")
     return when (val outcome = node.text("outcome")) {
@@ -93,7 +128,7 @@ internal fun judgePicassoAnswer(json: String): DispatchJudgement {
         "REFUSED" -> {
             val refusal = node.text("refusal")
             when {
-                refusal == null || refusal !in PICASSO_REFUSALS -> DispatchJudgement.AnswerUnknown("refusal $refusal")
+                refusal == null || refusal !in refusals -> DispatchJudgement.AnswerUnknown("refusal $refusal in schema $schema")
                 refusal in MAY_HAVE_LANDED -> DispatchJudgement.MayHaveLanded(
                     refusal,
                     if (refusal == "CONSUMED") node.get("consumed")?.text("executionId")?.takeIf { it.isNotBlank() } else null,

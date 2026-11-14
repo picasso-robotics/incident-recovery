@@ -105,9 +105,9 @@ class EpisodeCliTest {
 
     @Test fun `the export is read as the watcher reads it`() {
         val schema = assertFailsWith<IllegalArgumentException> {
-            openIn(exportOf("""{"schemaVersion":"7","runId":"r1","counts":{"incidents":0,"remedySearches":1}}""", searches = listOf(s1)), "--search", "s1")
+            openIn(exportOf("""{"schemaVersion":"8","runId":"r1","counts":{"incidents":0,"remedySearches":1}}""", searches = listOf(s1)), "--search", "s1")
         }
-        assertTrue(schema.message!!.contains("schemaVersion 7"), schema.message)
+        assertTrue(schema.message!!.contains("schemaVersion 8"), schema.message)
         val noCounts = assertFailsWith<IllegalArgumentException> { openIn(exportOf("""{"schemaVersion":"5","runId":"r1"}""", searches = listOf(s1)), "--search", "s1") }
         assertTrue(noCounts.message!!.contains("has no counts"), noCounts.message)
         val brokenIncident = assertFailsWith<IllegalArgumentException> { openIn(exportOf(searches = listOf(s1), incidents = listOf("{not json")), "--search", "s1") }

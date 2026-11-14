@@ -90,9 +90,17 @@ internal object PicassoAnswers {
     fun refused(refusal: String, schema: String = "4", consumed: String = "null"): String =
         """{"schemaVersion":"$schema","contractSemver":"0.9.0","instanceId":"$INSTANCE","outcome":"REFUSED","refusal":"$refusal","reason":"r","consumed":$consumed}"""
 
-    /** A consumption record as picasso writes it (ADR 46): who, when, which execution, what went out. */
-    fun consumedRecord(executionId: String = "exec-7"): String =
-        """{"approverId":"op-9","approverKind":"PERSON","at":"2026-10-03T00:00:00Z","wallClockAt":"2026-10-03T00:00:00Z","executionId":"$executionId","steps":[{"unitId":"remedy-1-pick_place","skillType":"pick_place","parameters":{}}]}"""
+    /**
+     * A consumption record as picasso writes it (ADR 46): who, when, which execution, what went out. [target] is the raw
+     * JSON of schema 5's `target` field (§15.320: `null` for an order approval, the hold for a recovery); null leaves the
+     * field out, as schema 4 writes the record.
+     */
+    fun consumedRecord(executionId: String = "exec-7", target: String? = null): String =
+        """{"approverId":"op-9","approverKind":"PERSON","at":"2026-10-03T00:00:00Z","wallClockAt":"2026-10-03T00:00:00Z","executionId":"$executionId","steps":[{"unitId":"remedy-1-pick_place","skillType":"pick_place","parameters":{}}]""" +
+            (target?.let { ""","target":$it""" } ?: "") + "}"
+
+    /** schema 5's `target` for a hold recovery (picasso `ApprovalWire.hold`): order version, unit, refused attempt. */
+    const val HOLD_TARGET = """{"orderVersion":1,"unitId":"u-2","attempt":1}"""
 }
 
 /** A JobResponse for the default attempt (instance and execution): every approved unit completed, nothing in doubt, online. */

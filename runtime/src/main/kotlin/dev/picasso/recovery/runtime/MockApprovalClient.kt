@@ -3,15 +3,17 @@ package dev.picasso.recovery.runtime
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
+import dev.picasso.recovery.core.PICASSO_APPROVAL_SCHEMA
 import java.util.UUID
 
 /**
- * picasso's approval window as the episode needs it (design §8.3, §11), in this process's memory, answering in schema 4
- * (picasso ADR 48, main 3d6530a). Like the real one it drops the idempotency key and offers no lookup of past approvals:
- * a proposal — one (robot, order) — is consumed by its first approval, and every later approval for it, whatever its
- * search line, is refused CONSUMED with the consumption record (ADR 46) — "my earlier attempt may have landed"
- * (UNKNOWN(OUTCOME) in the core). Revalidation is the only way to TRUE without a person (§8.3): TRUE while the proposal
- * stands, FALSE once consumed. The real window would raise a new proposal from a newer FOUND line; the mock never does.
+ * picasso's approval window as the episode needs it (design §8.3, §11), in this process's memory, answering in schema 5
+ * (picasso §15.320, main fde49d1: schema 4 of ADR 48 plus a `target` in the consumption record, always null here). Like
+ * the real one it drops the idempotency key and offers no lookup of past approvals: a proposal — one (robot, order) —
+ * is consumed by its first approval, and every later approval for it, whatever its search line, is refused CONSUMED with
+ * the consumption record (ADR 46) — "my earlier attempt may have landed" (UNKNOWN(OUTCOME) in the core). Revalidation is
+ * the only way to TRUE without a person (§8.3): TRUE while the proposal stands, FALSE once consumed. The real window
+ * would raise a new proposal from a newer FOUND line; the mock never does.
  *
  * Every answer carries [instanceId] — by default a fresh one per mock, as picasso never names an instance
  * deterministically (ADR 48: a restarted instance must not repeat an old (instance, execution) pair); tests that carry
@@ -23,7 +25,9 @@ import java.util.UUID
  *
  * A test double: the consumption records live in this process only, so a restarted worker approves again. It does not
  * model the approver's id (always "incident-recovery"), the consumption times (always the epoch), the REMEDY_NOT_APPLIED path (an
- * approval for an order already executing), or a missing approverKind (real picasso rejects it; the mock assumes PERSON).
+ * approval for an order already executing or withdrawn), a missing approverKind (real picasso rejects it; the mock assumes
+ * PERSON), or a hold recovery (picasso §15.320: such a proposal answers HUMAN_APPROVAL_REQUIRED, and its consumption names
+ * the hold in `target`) — every proposal here is an order's, so every `target` is null.
  */
 class MockApprovalClient(val instanceId: String = "mock-${UUID.randomUUID()}") : ApprovalClient {
     private val consumed = HashMap<Pair<String, String>, ObjectNode>()   // (robotId, jobOrderId) -> consumption record
@@ -46,7 +50,7 @@ class MockApprovalClient(val instanceId: String = "mock-${UUID.randomUUID()}") :
         }
     }
 
-    /** The answer text, picasso `ApprovalWire.encode` schema 4. [approverKind] goes into the consumption record. */
+    /** The answer text, picasso `ApprovalWire.encode` schema 5. [approverKind] goes into the consumption record. */
     @Synchronized override fun approve(intent: JsonNode, approverKind: String?): String {
         val candidate = intent.path("candidate")
         val key = proposal(candidate) ?: return refused("NO_PROPOSAL", "mock: no proposal for an unnamed robot/order", null)
@@ -65,6 +69,7 @@ class MockApprovalClient(val instanceId: String = "mock-${UUID.randomUUID()}") :
             put("wallClockAt", "1970-01-01T00:00:00Z")
             put("executionId", executionId)
             set<ArrayNode>("steps", steps.deepCopy())
+            putNull("target")   // an order approval's consumption; the key is never left out (picasso §7.3, schema 5)
         }
         return answer().apply {
             put("outcome", "APPROVED")
@@ -81,7 +86,7 @@ class MockApprovalClient(val instanceId: String = "mock-${UUID.randomUUID()}") :
     }
 
     private fun answer(): ObjectNode = strictJson.createObjectNode().apply {
-        put("schemaVersion", "4")
+        put("schemaVersion", PICASSO_APPROVAL_SCHEMA)
         put("contractSemver", "0.9.0")
         put("instanceId", instanceId)
     }

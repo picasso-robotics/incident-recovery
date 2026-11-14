@@ -41,7 +41,7 @@ picasso 번들은 조치 탐색 기록과 인시던트 줄을 담아 picasso가 
   <img alt="번들에서 에피소드로 이어지는 두 경로. picasso가 쓰는 run-1/ 번들에는 manifest.json, remedy-searches.jsonl, incidents.jsonl이 있으며, manifest에는 runId와 incidents 9줄·remedySearches 4줄의 counts가 있다. 조치 탐색 기록 search-1은 로봇 hum-02, 작업 지시 PATROL-1, 결과 FOUND이고, incident-1도 같은 로봇과 작업 지시의 인시던트다. 위쪽 경로에서 :host:cli open --search search-1은 search-1만 전달하여 ep:recovery-demo-1을 연다. 아래쪽 경로에서 감시기 :host:watcher는 robotId + jobOrderId가 일치하는 search-1과 incident-1을 상관하여 하나의 에피소드를 연다. 번들 밖의 job-responses.jsonl은 나중에 도착하며 점선 화살표로 감시기에게 전달된다. 실선은 증상 전달, 점선은 나중에 도착하는 작업 응답, 왼쪽 영역은 번들의 세 파일을 나타낸다. manifest 원문은 에피소드와 진단 요청에 포함되고, 해석하지 않는 필드도 원문으로 보존되어 증상 목록에 표시된다." src="docs/diagrams/bundle.svg">
 </picture>
 
-커밋된 샘플은 `runtime/src/test/resources/picasso/schema-6/run-1/`에 있습니다. incident-recovery는 LedgerExport 스키마 버전 `"5"`와 `"6"`을 읽고, `counts`에 지정된 줄 수만큼 각 파일의 앞부분을 읽으며, 그 밖의 스키마 버전은 거부합니다(감시기는 번들을 손상된 것으로 기록하고 CLI는 오류로 중단합니다). 진단 스냅샷과 narrator도 스키마 버전 `"5"`와 `"6"`을 모두 받으므로, 스키마 버전 `"6"` 번들에서 열린 에피소드는 스키마 버전 `"5"` 에피소드와 같은 방식으로 진단됩니다. 아래 JSON은 샘플에서 읽는 필드만 남긴 예입니다.
+커밋된 샘플은 `runtime/src/test/resources/picasso/schema-6/run-1/`에 있습니다. incident-recovery는 LedgerExport 스키마 버전 `"5"`, `"6"`, `"7"`을 읽고, `counts`에 지정된 줄 수만큼 각 파일의 앞부분을 읽으며, 그 밖의 스키마 버전은 거부합니다(감시기는 번들을 손상된 것으로 기록하고 CLI는 오류로 중단합니다). 진단 스냅샷과 narrator도 스키마 버전 `"5"`와 `"6"`을 모두 받으므로, 스키마 버전 `"6"` 번들에서 열린 에피소드는 스키마 버전 `"5"` 에피소드와 같은 방식으로 진단됩니다. 아래 JSON은 샘플에서 읽는 필드만 남긴 예입니다.
 
 `remedy-searches.jsonl`의 첫 줄:
 
@@ -78,7 +78,7 @@ picasso 번들은 조치 탐색 기록과 인시던트 줄을 담아 picasso가 
 
 ## 함께 사용하는 시스템
 
-- picasso: incident-recovery는 picasso 승인 엔드포인트(`POST /approvals`, 스키마 4)에 승인 요청을 보내고, picasso의 작업 응답(JobResponse 줄, ResultExport 스키마 1)을 읽습니다. 승인 엔드포인트는 루프백에서만 접근할 수 있습니다.
+- picasso: incident-recovery는 picasso 승인 엔드포인트(`POST /approvals`, 스키마 4와 5)에 승인 요청을 보내고, picasso의 작업 응답(JobResponse 줄, ResultExport 스키마 1)을 읽습니다. 승인 엔드포인트는 루프백에서만 접근할 수 있습니다.
 - narrator: Temporal 큐 `narrator-tq`의 `diagnose` 액티비티를 사용하며, 진단 계약은 0.6입니다. `RECOVERY_NARRATOR=mock`(기본값)이면 incident-recovery 워커가 목 narrator 액티비티로 해당 큐를 직접 처리합니다. `remote`이면 narrator 자체 워커가 처리합니다.
 - Temporal: incident-recovery는 narrator 워커와 picasso가 사용하는 것과 같은 `localhost:7233`의 Temporal 서버를 사용합니다. 자체 Docker Compose 파일은 Postgres만 시작합니다(데이터베이스 `incident_recovery`, 호스트 포트 15433). 전용 Temporal은 `docker compose --profile temporal up -d`로만 시작하며, 7233을 사용 중인 프로세스가 없는 머신을 위한 구성입니다.
 - Temporal 공유: incident-recovery가 분리되어 나온 koshei 저장소에는 이제 에피소드 루프가 없습니다. koshei의 main 브랜치에서 커밋 335946a(koshei PR #11, 2026-10-05)로 제거되었습니다. 다만 335946a 이전의 koshei 빌드와 그 빌드가 공용 Temporal 서버에서 시작해 아직 열려 있는 에피소드에는 공유 시 주의사항이 여전히 적용됩니다. 정책 테이블 v1에서 운영자에게 인계된 에피소드는 24시간 동안 열려 있습니다. 같은 Temporal 서버에서 incident-recovery와 koshei는 워크플로 타입 `EpisodeWorkflow`, 워크플로 ID `ep:<key>`, narrator의 큐 `narrator-tq`를 공유합니다. 따라서 `agent-off --all`은 koshei의 열린 에피소드에도 전달되며, `open`으로 지정한 ID가 koshei에서 실행 중이면 koshei의 실행에 신호를 보냅니다. 공용 서버에서는 `--key`에 incident-recovery 전용 접두사를 지정하거나, narrator 워커가 실행 중이면 `RECOVERY_NARRATOR=remote`를 설정하거나, 7233을 사용 중인 프로세스가 없는 머신에서 전용 Temporal(`docker compose --profile temporal up -d`)을 사용하세요. 자세한 내용은 [`docs/usage.md`](docs/usage.md#sharing-temporal) §1에 있습니다.

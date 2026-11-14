@@ -9,6 +9,9 @@ import kotlin.test.assertTrue
 class SnapshotTest {
     private val manifest = PicassoRun1.manifest
 
+    private fun edited(line: String, edit: ObjectNode.() -> Unit): String =
+        mapper.writeValueAsString((mapper.readTree(line) as ObjectNode).apply(edit))
+
     @Test fun `lines stay verbatim, field order included`() {
         val line = PicassoRun1.incident("incident-6")
         val s = Snapshot.parse(manifest, listOf(line), emptyList())
@@ -24,14 +27,32 @@ class SnapshotTest {
         assertTrue(m.get("schemaVersion").isTextual)
     }
 
-    @Test fun `schemaVersion 6 is read as 5 is, other versions are rejected`() {
+    @Test fun `schemaVersions 6 and 7 are read as 5 is, other versions are rejected`() {
         val search = listOf(PicassoRun1.search("search-1"))
-        val six = manifest.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"6\"")
-        assertEquals("6", Snapshot.parse(six, emptyList(), search).manifest.text("schemaVersion"))
-        for (other in listOf("4", "7")) {
+        for (known in listOf("6", "7")) {
+            val m = manifest.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"$known\"")
+            assertEquals(known, Snapshot.parse(m, emptyList(), search).manifest.text("schemaVersion"))
+        }
+        for (other in listOf("4", "8")) {
             val m = manifest.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"$other\"")
             assertFailsWith<IllegalArgumentException> { Snapshot.parse(m, emptyList(), search) }
         }
+    }
+
+    @Test fun `a decision its export schema cannot carry is rejected - OPERATOR_CANCEL and REMEDY_APPLIED only from 7`() {
+        fun decided(decision: String) = edited(PicassoRun1.incident("incident-6")) { putObject("resolution").put("decision", decision) }
+        fun schema(v: String) = manifest.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"$v\"")
+        for (v in listOf("5", "6", "7")) for (d in listOf("REWORK", "CONFIRM_DONE")) Snapshot.parse(schema(v), listOf(decided(d)), emptyList())
+        for (d in listOf("OPERATOR_CANCEL", "REMEDY_APPLIED")) {
+            Snapshot.parse(schema("7"), listOf(decided(d)), emptyList())
+            for (v in listOf("5", "6")) assertFailsWith<IllegalArgumentException>("$d in $v") { Snapshot.parse(schema(v), listOf(decided(d)), emptyList()) }
+        }
+        assertFailsWith<IllegalArgumentException> { Snapshot.parse(schema("7"), listOf(decided("RECOVERED")), emptyList()) }
+        val numeric = edited(PicassoRun1.incident("incident-6")) { putObject("resolution").put("decision", 1) }
+        assertFailsWith<IllegalArgumentException> { Snapshot.parse(schema("7"), listOf(numeric), emptyList()) }
+        // no judgement given, or a resolution without a decision key: nothing to check
+        val noKey = edited(PicassoRun1.incident("incident-6")) { putObject("resolution").put("at", "2026-09-06T00:00:01Z") }
+        Snapshot.parse(schema("7"), listOf(PicassoRun1.incident("incident-6"), noKey), emptyList())
     }
 
     @Test fun `a numeric schemaVersion is rejected`() {

@@ -64,6 +64,12 @@ class CandidatesTest {
             putObject("resolution").put("decision", "REWORK")
         }
         assertEquals(listOf("ESCALATE"), ids(Snapshot.parse(PicassoRun1.manifest, listOf(decided), emptyList()), emptyList()))
+        // export schema 7's two person's steps: a closed execution, or a remedy put in front of the unit (not "recovered")
+        val seven = PicassoRun1.manifest.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"7\"")
+        for (step in listOf("OPERATOR_CANCEL", "REMEDY_APPLIED")) {
+            val line = edited(PicassoRun1.incident("incident-6")) { putObject("resolution").put("decision", step) }
+            assertEquals(listOf("ESCALATE"), ids(Snapshot.parse(seven, listOf(line), emptyList()), emptyList()), step)
+        }
     }
 
     @Test fun `a held unit the equipment did not match offers no decision - a person checks it on site`() {

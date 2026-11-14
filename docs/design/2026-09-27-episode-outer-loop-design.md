@@ -316,11 +316,11 @@ DIAGNOSING 대신 ESCALATED(`ATTEMPTS_EXHAUSTED`)로 간다.
 | DISPATCH_PENDING | 이 실행 의도와 맞지 않는 `Recorded` · `RecordFailed`(다른 `seq`) | ESCALATED | `RECORD_FAILED`. 조치를 내지 않는 쪽을 고른다 — `Dispatch` 는 이 의도의 `Recorded` 에서만 나온다 |
 | DISPATCH_PENDING | `EvidenceArrived` | (그대로) | 기록만. 이 시도의 `Recorded` 앞에 처리한 것이라 근거로 치지 않는다 (§12) |
 | DISPATCHED | `EvidenceArrived` | (그대로) | 기록하고 보관한다. 결과 통보는 수락과 같은 펌프에서 나오므로 답보다 먼저 올 수 있다. AWAITING_EVIDENCE · UNKNOWN(OUTCOME) 에 들어갈 때 다시 적용한다 — 내부 재적용이라 통보 중복 제거((`instanceId`, `jobResponseId`), 보관할 때 이미 거쳤다)에 걸리지 않는다 |
-| DISPATCHED | 답의 `schemaVersion` 이 `"4"` 가 아님 · `instanceId` 없음 · `outcome` 이 `APPROVED` · `REFUSED` 밖 · `refusal` 이 판 4 의 열여섯(§8.4) 밖 · `APPROVED` 인데 `executionId` 가 없거나 걸음이 없거나 걸음마다 다른 `unitId` 가 없음 · 후보 종류와 맞지 않는 답 | ESCALATED | `DISPATCH_ANSWER_UNKNOWN`. **DISPATCHED 의 picasso 답 행 중 이 검사가 먼저다** (§8.4) |
+| DISPATCHED | 응답의 `schemaVersion` 이 `"4"` · `"5"` 밖 · `instanceId` 없음 · `outcome` 이 `APPROVED` · `REFUSED` 밖 · `refusal` 이 그 버전의 거부 값(버전 4 의 열여섯, 버전 5 의 열일곱, §8.4) 밖 · `APPROVED` 인데 `executionId` 가 없거나 걸음이 없거나 걸음마다 다른 `unitId` 가 없음 · 후보 종류와 맞지 않는 응답 | ESCALATED | `DISPATCH_ANSWER_UNKNOWN`. **DISPATCHED 의 picasso 응답 행 중 이 검사가 먼저다** (§8.4) |
 | DISPATCHED | 수락(`APPROVE_REMEDY` 는 `outcome: APPROVED` — `executionId` 와 실제로 나간 `steps` 를 싣는다) · 사람 과업 발행 · 자식 사가 완료 | AWAITING_EVIDENCE | (`instanceId`, `executionId`) 가 결과 통보를 이 시도에 잇는다(§12). 걸음 `unitId` 들이 대상 단위다. `REMEDY_NOT_APPLIED` 는 수락이 아니다 (아래 행) |
-| DISPATCHED | `NO_PROPOSAL` · `REMEDY_NOT_APPLIED` · `CONSUMED` · 재시도 소진 · `dispatchMs` 만료 · 자식 사가 UNKNOWN 보고 | UNKNOWN(OUTCOME) | 나갔는지 모름 (§11). 셋 다 「내 앞선 시도가 이미 들어갔을 수 있음」이고 재시도로 풀지 않는다 |
+| DISPATCHED | `NO_PROPOSAL` · `REMEDY_NOT_APPLIED` · `CONSUMED` · 재시도 소진 · `dispatchMs` 만료 · 자식 사가 UNKNOWN 보고 | UNKNOWN(OUTCOME) | 나갔는지 모름 (§11). 셋 다 「내 앞선 시도가 이미 들어갔을 수 있음」이고 재시도로 풀지 않는다. picasso §15.319 뒤로 `NO_PROPOSAL` 은 다른 실행이 쥔 기체라 제안이 선 적 없는 `FOUND` 에도 오고, `REMEDY_NOT_APPLIED` 는 실행 호스트가 철회한 작업 지시(mission-ops B3)와 대상이 사라진 보류 회복에도 온다. 응답의 산문(`reason`)으로만 갈리므로 같이 접는다 (§8.4 구현(버전 5)) |
 | DISPATCHED | 재진단 목록(§8.4)에 있는 거절 열거값 | DIAGNOSING | `DISPATCH_REFUSED(enum)`. 목록은 지금 비어 있다 |
-| DISPATCHED | 그 밖의 아는 거절 값(판 4 의 열여섯 가운데 `NO_PROPOSAL` · `REMEDY_NOT_APPLIED` · `CONSUMED` 를 뺀 열셋) | ESCALATED | `DISPATCH_REFUSED(enum)`. 기본값. `refusal` 열거값으로만 가르고 산문은 보지 않는다. 재진단으로 고칠 수 없는 거절을 다른 후보로 돌려 누르지 않게 한다 (§8.4) |
+| DISPATCHED | 그 밖의 아는 거부 값(버전 4 의 열여섯 · 버전 5 의 열일곱 가운데 `NO_PROPOSAL` · `REMEDY_NOT_APPLIED` · `CONSUMED` 를 뺀 열셋 · 열넷) | ESCALATED | `DISPATCH_REFUSED(enum)`. 기본값. 버전 5 의 `HUMAN_APPROVAL_REQUIRED` 도 이 행이다(§8.4 구현(버전 5)). `refusal` 열거값으로만 가르고 산문은 보지 않는다. 재진단으로 고칠 수 없는 거부를 다른 후보로 돌려 누르지 않게 한다 (§8.4) |
 | DISPATCHED | 자식 사가 실패(보상 끝남) | DIAGNOSING | `CHILD_FAILED` |
 | DISPATCHED | 위 행 어디에도 맞지 않는 `DispatchReturned` | ESCALATED | `DISPATCH_ANSWER_UNKNOWN`. 액티비티 결과는 「그대로」 규칙으로 삼키지 않는다 |
 | AWAITING_EVIDENCE, UNKNOWN(OUTCOME) | ① `EvidenceArrived` 인데 대상과 이어지지 않음 · **이 시도의** `Recorded` 앞(앞선 시도의 늦은 통보 포함) · 이미 본 (`instanceId`, `jobResponseId`) | (그대로) | 기록만. 기한(`evidenceMs` · `unknownMs`)이 출구를 지킨다 |
@@ -576,7 +576,7 @@ Update 의 답(`Reply`, 거절도 값)이다. PROPOSED 는 순간 상태라 `Pha
     에피소드에 넣을 수 있다.
 - CLI 는 이제 감시자와 같은 `ExportSymptoms` · `Bundles` 로 읽는다(§12 구현(C1)). 그래서 CLI 가 보내는 줄은 감시자가 보낼 줄이고,
   `eventId` 도 같다.
-  - manifest 에 `schemaVersion "5"` 또는 `schemaVersion "6"` 와 `counts` 가 있어야 한다.
+  - manifest 에 `schemaVersion "5"` · `"6"` · `"7"` 중 하나와 `counts` 가 있어야 한다. 인시던트 줄의 `resolution.decision` 이 그 버전이 들 수 없는 값이면 열지 않는다(§12).
   - `counts` 뒤의 줄은 읽지 않는다.
   - 두 jsonl 파일 어디든 깨진 줄이나 겹친 id 가 있으면 열지 않는다. 깨진 사건 줄은 `--search` 도 막는다.
   - 묶음이 아직 다 쓰이지 않았으면(manifest 없음, 줄이 모자람, 읽는 사이 manifest 가 바뀜) 사유 한 줄과 「not ready yet; read again once
@@ -806,6 +806,18 @@ catalog)** 에 선언한다. 항목: 사가 정의 `name@x.y.z`, 값의 출처(�
 - Mock picasso 도 판 4 로 답한다. 인스턴스 id 는 기본이 무작위 `mock-<uuid>` 이고, 시험은 `MockPicasso.INSTANCE`(`mock-instance-1`)를 쓴다.
   소모된 (기체, 주문)의 승인은 탐색 줄이 달라도 `CONSUMED`(소모 기록을 실어)다(picasso 참조 구동기의 `hum-02` 와 같다).
 
+**구현(버전 5, 2026-11-14).** 승인 창구 응답 버전 `"4"` 와 `"5"` 를 둘 다 읽는다(picasso main `fde49d1`, §15.320). 커밋된 재생 이력에 버전 4 응답이 있고, 옛 picasso 는 버전 4 로 응답한다.
+- 버전 5 는 거부 값에 `HUMAN_APPROVAL_REQUIRED` 를 더하고, 소모 기록에 `target` 칸을 더한다(작업 수락 승인의 소모면 `null`, 보류 회복의 소모면 `orderVersion` · `unitId` · `attempt`). 그 밖의 칸은 버전 4 그대로다.
+- 거부 값은 버전마다 따로 안다. 버전 4 응답의 `HUMAN_APPROVAL_REQUIRED` 는 모르는 응답(`DISPATCH_ANSWER_UNKNOWN`)이다.
+- `HUMAN_APPROVAL_REQUIRED` 는 「사람만 승인하는 회복 제안」이다. 작업 수락 뒤 기체가 파지 때문에 거부해 운영자 보류에 선 단위 앞에 끼울 조치이고, 값 없는 문(`POST /approvals`)은 승인자가 `PERSON` 이어도 이 응답을 낸다. 다시 시도해도 같다.
+  그래서 기본값 그대로 ESCALATED(`DISPATCH_REFUSED`, 상세 `HUMAN_APPROVAL_REQUIRED`)로 사람에게 넘긴다. 재진단 목록에 넣지 않는다.
+  incident-recovery 에는 picasso 의 사람 회복 입구(`Middleware.approveRecovery`)로 가는 길이 없다. 넘겨받은 사람은 실행 호스트 쪽에서 그 보류를 닫는다 — mission-ops 실행 호스트에도 회복 입구는 없고, 운영자가 화면에서 판단(재작업 · 완료 확인)이나 실행 취소로 닫는다(mission-ops 인계 `incident-loop.md`).
+  에이전트 회복 승인을 열지는 picasso 소유자가 정할 ADR 47 예외의 사안이고, incident-recovery 는 요청하지 않았다.
+- `NOT_DECLARED` · `NO_PROPOSAL` 과는 다음 행동이 다르다. `NOT_DECLARED` 는 선언을 올리면 풀리고, `NO_PROPOSAL` 은 「이미 들어갔을 수 있음」(UNKNOWN(OUTCOME))이다. 셋을 접지 않는다.
+- 소모 기록의 `target` 은 읽어 가르지 않는다. `DISPATCH_RESULT` 기록의 응답 원문에 그대로 남는다. 보류 회복의 소모도 `CONSUMED` 라 UNKNOWN(OUTCOME)이고, 그 `executionId` 는 원래 실행이다.
+- picasso §15.319 뒤로 `FOUND` 탐색 줄은 「승인할 제안이 서 있다」가 아니다. 다른 실행이 기체를 쥐면 탐색 줄만 서고 제안은 서지 않는다. 후보(`APPROVE_REMEDY`)는 그 줄에서 그대로 서고, 승인하면 `NO_PROPOSAL` 이 온다. 승인 가능 여부는 줄이 아니라 응답이 정한다.
+- Mock picasso 는 버전 5 로 응답한다. 모든 제안이 작업 수락의 것이라 `target` 은 늘 `null` 이고, `HUMAN_APPROVAL_REQUIRED` 는 내지 않는다.
+
 **구현(C3).** 실물 창구 클라이언트는 `HttpApprovalWindow`(`:episode-runtime`)다. `RECOVERY_PICASSO=picasso` 면 워커가 이것을 쓴다(§4.2).
 - 요청은 picasso 의 다섯 칸이다: `approverId`, `approverKind`, `robotId`, `jobOrderId`, `sawSkillTypes`(picasso `ApprovalWire.decode`). 그 밖의 칸은 보내지 않는다.
 - 승인자 id 는 PERSON 이면 운영자의 `decide` 가 적은 id 다. AGENT 면 설정의 `RECOVERY_PICASSO_AGENT_ID` 다. PERSON 인데 id 가 없으면 재시도 없는 실패(`BadIntent`)다. 지어내지 않는다.
@@ -868,8 +880,11 @@ catalog)** 에 선언한다. 항목: 사가 정의 `name@x.y.z`, 값의 출처(�
 ### 9.0 진단 스냅샷의 모양
 
 - `snapshot.manifest` 는 picasso 가 쓴 `manifest.json` 의 칸을 **전부 그대로** 싣는다(`schemaVersion` · `runId` · `writtenAt` ·
-  `virtualNow` · `contractSemver` · `counts`). 형도 바꾸지 않는다 — 예: `schemaVersion` 은 글자 `"5"` 또는 `"6"` 다. narrator 는 아는 버전만 읽고
+  `virtualNow` · `contractSemver` · `counts`). 형도 바꾸지 않는다 — 예: `schemaVersion` 은 글자 `"5"` · `"6"` · `"7"` 중 하나다(`"7"` 은 narrator `d4df329`, 2026-11-14 브랜치 `chore/picasso-export-7` 부터). narrator 는 아는 버전만 읽고
   다른 버전이면 비재시도 예외로 멈춘다(§8.1 의 "계약 판 불일치" 와 같은 갈래 → `DIAGNOSIS_FAILED`).
+  인시던트 줄 `resolution.decision` 도 버전마다 아는 값만 받는다(`"5"` · `"6"` 은 `REWORK` · `CONFIRM_DONE`, `"7"` 은 여기에 `OPERATOR_CANCEL` · `REMEDY_APPLIED`).
+  스냅숏도 같은 표(`Snapshot.DECISIONS`)로 막는다. `REMEDY_APPLIED` 는 「회복 완료」가 아니다 — 사람이 회복 제안을 승인해 조치가 그 단위 앞에 끼었다는 것뿐이고, 결과는 뒤의 인시던트 · 작업 응답이 말한다.
+  판단이 실린 인시던트 줄(네 값 모두)은 운영자 판단 후보를 내지 않는다(§9.1).
 - `snapshot.incidents` · `snapshot.searches` 는 **에피소드를 연 줄을 각 목록의 첫째**에 둔다. narrator 는 v1 에서 incidents 의 첫째를
   주체, searches 의 첫째를 짝으로 질의에 옮기고(사건 줄이 없으면 searches 의 첫째만), 합류한 증상(둘째 줄부터)은 싣지 않는다.
   짝은 지어낸 것이 아니라 §12 의 결정적 병합 규칙이 묶은 것이다.
@@ -1228,8 +1243,10 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
 
 *읽기 (`Bundles`).* 내보내기만 이 읽개를 쓴다. 결과 통보는 `ResultExportFile`(아래 구현(C2)). picasso `BundleWriter` 의 규율(jsonl 먼저, `manifest.json` 마지막, 각각 이름 바꾸기)을 전제한다.
 - manifest 가 없으면 아직이다(`NotReady`, 다음 폴링에 다시). manifest 는 1 MiB, 줄 파일은 64 MiB 까지만 읽는다. 넘으면 깨짐(`Broken`)이다.
-- manifest 의 `schemaVersion` 이 아는 버전이어야 한다(내보내기 manifest `"5"` 또는 `"6"`. 결과 통보는 manifest 가 없고 줄마다 버전 `"1"` 을 든다 — 아래 구현(C2)). run 칸(`runId`)과
+- manifest 의 `schemaVersion` 이 아는 버전이어야 한다(내보내기 manifest `"5"` · `"6"` · `"7"`. 결과 통보는 manifest 가 없고 줄마다 버전 `"1"` 을 든다 — 아래 구현(C2)). run 칸(`runId`)과
   `counts` 가 있어야 한다.
+- 내보내기(`ExportSymptoms`)는 다 읽은 뒤 인시던트 줄의 `resolution.decision` 을 그 버전이 들 수 있는 값(`Snapshot.DECISIONS`, §9.0)과 대조한다.
+  모르는 값이 하나라도 있으면 깨짐이다 — 아는 버전을 밝히고 모르는 값을 실은 줄은 형식이 바뀐 것이고, 그 줄로는 진단 스냅숏도 서지 않는다.
 - 줄은 `counts.<키>` 만큼만 읽는다. 살아 있는 담는 쪽은 줄을 더할 때 파일을 통째로 다시 쓰므로 파일이 manifest 보다 새로울 수 있다. 그 뒤의
   줄은 아직 manifest 가 쓰이지 않은 다음 판의 것이다. 줄이 모자라면 아직이다. 센 수가 0 이면 파일을 읽지 않는다.
 - 건너뛰는 줄은 비었거나 공백 · 탭 · CR 만 든 줄뿐이다. 다른 유니코드 공백(U+00A0 등)만 든 줄은 줄이고, JSON 이 아니므로 깨진 줄이다.

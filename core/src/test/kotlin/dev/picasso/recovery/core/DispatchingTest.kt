@@ -117,6 +117,13 @@ class DispatchingTest {
         }
     }
 
+    @Test fun `HUMAN_APPROVAL_REQUIRED goes to a person with its value - only a person may approve that recovery`() {
+        val s = dispatched().returned(DispatchResult.Answer(PicassoAnswers.refused("HUMAN_APPROVAL_REQUIRED", schema = "5")))
+        assertEquals(Escalation(EscalationReason.DISPATCH_REFUSED, "HUMAN_APPROVAL_REQUIRED"), s.state.escalation)
+        assertEquals("REFUSED", s.records(RecordKind.DISPATCH_RESULT).single().entry.payload.get("judgement").textValue())
+        assertTrue(s.commands.none { it is Command.Dispatch || it is Command.RecordIntent })
+    }
+
     @Test fun `an answer incident-recovery does not understand goes to a person`() {
         val s = dispatched().returned(DispatchResult.Answer(PicassoAnswers.refused("REFUSED_BY_GATE", schema = "3")))
         assertEquals(EscalationReason.DISPATCH_ANSWER_UNKNOWN, s.reason)

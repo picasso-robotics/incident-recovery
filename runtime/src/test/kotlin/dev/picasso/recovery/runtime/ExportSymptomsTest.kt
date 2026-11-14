@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ExportSymptomsTest {
     private val run1: Path = Path.of(checkNotNull(javaClass.getResource("/picasso/run-1/manifest.json")).toURI()).parent
@@ -41,7 +42,35 @@ class ExportSymptomsTest {
         val r = assertIs<BundleRead.Ready>(ExportSymptoms.read(dir))
         assertEquals(9, r.lines.getValue(ExportKind.INCIDENT.file.name).size)
         assertEquals(4, r.lines.getValue(ExportKind.SEARCH.file.name).size)
-        Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"7\""))
+        Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"8\""))
+        assertIs<BundleRead.Broken>(ExportSymptoms.read(dir))
+    }
+
+    @Test fun `the committed schema 7 sample reads as ten incidents and four searches`() {
+        val sample = Path.of(checkNotNull(javaClass.getResource("/picasso/schema-7/run-1/manifest.json")).toURI()).parent
+        val r = assertIs<BundleRead.Ready>(ExportSymptoms.read(sample))
+        assertEquals("run-2026-11-14T05:46:55.751143400Z-1", r.runId)
+        val incidents = r.lines.getValue(ExportKind.INCIDENT.file.name)
+        assertEquals(10, incidents.size)
+        assertEquals(4, r.lines.getValue(ExportKind.SEARCH.file.name).size)
+        // hum-02's and hum-04's earlier incidents carry the person's cancel (picasso §15.320)
+        assertEquals(listOf("incident-1", "incident-3"), incidents.filter { it.node.path("resolution").path("decision").textValue() == "OPERATOR_CANCEL" }.map { it.id })
+        val search = r.lines.getValue(ExportKind.SEARCH.file.name).first()
+        assertEquals("search:${r.runId}:search-1", ExportSymptoms.symptom(ExportKind.SEARCH, r, search, 0)!!.eventId)
+    }
+
+    @Test fun `an incident decision its schema cannot carry makes the bundle broken`(@TempDir dir: Path) {
+        val sample = Path.of(checkNotNull(javaClass.getResource("/picasso/schema-7/run-1/manifest.json")).toURI()).parent
+        Files.list(sample).use { files -> files.forEach { Files.copy(it, dir.resolve(it.fileName)) } }
+        val manifest = dir.resolve("manifest.json")
+        val seven = Files.readString(manifest)
+        // schema 6 had no OPERATOR_CANCEL: a known version with an unknown value is a changed format
+        Files.writeString(manifest, seven.replace("\"schemaVersion\":\"7\"", "\"schemaVersion\":\"6\""))
+        val six = assertIs<BundleRead.Broken>(ExportSymptoms.read(dir))
+        assertTrue("OPERATOR_CANCEL" in six.why, six.why)
+        Files.writeString(manifest, seven)
+        val incidents = dir.resolve("incidents.jsonl")
+        Files.writeString(incidents, Files.readString(incidents).replace("\"decision\":\"OPERATOR_CANCEL\"", "\"decision\":\"RECOVERED\""))
         assertIs<BundleRead.Broken>(ExportSymptoms.read(dir))
     }
 

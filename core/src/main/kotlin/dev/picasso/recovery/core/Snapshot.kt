@@ -25,6 +25,10 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
         }
         require(incidents.isNotEmpty() || searches.isNotEmpty()) { "a snapshot needs at least one incident or search line" }
         incidents.forEach { require(!it.text("digest").isNullOrBlank()) { "incident line without digest: ${it.get("incidentId")}" } }
+        val strange = unknownDecisions(sv.textValue(), incidents)
+        require(strange.isEmpty()) {
+            "export schema ${sv.textValue()} carries resolution.decision ${DECISIONS[sv.textValue()]}, was $strange"
+        }
         searches.forEach { require(!it.text("searchId").isNullOrBlank()) { "search line without searchId" } }
     }
 
@@ -36,10 +40,41 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
 
     companion object {
         /**
-         * The picasso export schemas narrator reads (contract 0.6 §3): "5", and "6" since narrator `376d082`
-         * (2026-10-08), the same list as this module's export reader.
+         * The picasso export schemas narrator reads (contract 0.6 §3): "5", "6" since narrator `376d082` (2026-10-08),
+         * and "7" since narrator `d4df329` (2026-11-14, branch `chore/picasso-export-7`, not yet on narrator main when this
+         * was written) — the same list as this module's export reader. "7" (picasso §15.320, main fde49d1) keeps every
+         * field and adds two values to an incident line's `resolution.decision` ([DECISIONS]).
          */
-        val SCHEMA_VERSIONS = setOf("5", "6")
+        val SCHEMA_VERSIONS = setOf("5", "6", "7")
+
+        /**
+         * The values an incident line's `resolution.decision` may carry in each export schema (picasso
+         * `IncidentDecision`, main fde49d1): REWORK and CONFIRM_DONE in "5" and "6"; "7" adds OPERATOR_CANCEL (a person
+         * closed the execution at the operator cancel entrance) and REMEDY_APPLIED (a person approved a recovery
+         * proposal and the remedy was put in front of that unit — NOT "recovered": what the remedy and the unit did is
+         * told by later incidents and job responses). The same table as narrator `d4df329` (`receiver/export.py`
+         * `DECISIONS`), which its diagnosis contract check also applies: a value outside it is a changed format, and
+         * read as if known it would reach the diagnosis as a fact.
+         */
+        val DECISIONS: Map<String, Set<String>> = mapOf(
+            "5" to setOf("REWORK", "CONFIRM_DONE"),
+            "6" to setOf("REWORK", "CONFIRM_DONE"),
+            "7" to setOf("REWORK", "CONFIRM_DONE", "OPERATOR_CANCEL", "REMEDY_APPLIED"),
+        )
+
+        /**
+         * The `resolution.decision` values in [incidents] that export schema [version] cannot carry (empty when all
+         * can). A null `resolution` ("no judgement given") and a `resolution` without a `decision` key are not checked,
+         * as narrator does not; a decision that is not a string is never one the schema can carry.
+         */
+        fun unknownDecisions(version: String, incidents: List<JsonNode>): List<String> {
+            val known = DECISIONS[version].orEmpty()
+            return incidents.mapNotNull { it.get("resolution") }
+                .filter { it.isObject && it.has("decision") }
+                .map { it.get("decision") }
+                .filterNot { it.isTextual && it.textValue() in known }
+                .map { it.toString() }
+        }
 
         fun parse(manifestJson: String, incidentLines: List<String>, searchLines: List<String>): Snapshot =
             Snapshot(obj(manifestJson), incidentLines.map(::obj), searchLines.map(::obj))
