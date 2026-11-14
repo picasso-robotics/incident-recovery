@@ -42,8 +42,12 @@ class ExportSymptomsTest {
         val r = assertIs<BundleRead.Ready>(ExportSymptoms.read(dir))
         assertEquals(9, r.lines.getValue(ExportKind.INCIDENT.file.name).size)
         assertEquals(4, r.lines.getValue(ExportKind.SEARCH.file.name).size)
-        Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"9\""))
+        Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"10\""))
         assertIs<BundleRead.Broken>(ExportSymptoms.read(dir))
+        // schema 9 keeps schema 8's fields: a run-1 line of schema 5 under "9" is a changed format as well
+        Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"9\""))
+        val nine = assertIs<BundleRead.Broken>(ExportSymptoms.read(dir))
+        assertTrue("manifest.instanceId" in nine.why && "openingKind" in nine.why, nine.why)
         // schema 8 without its fields: a run-1 line of schema 5 under "8" is a changed format
         Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"8\""))
         val eight = assertIs<BundleRead.Broken>(ExportSymptoms.read(dir))
@@ -67,6 +71,33 @@ class ExportSymptomsTest {
         val reopened = after.lines.getValue(ExportKind.INCIDENT.file.name).single()
         assertEquals("REOPENED", reopened.node.path("openingKind").textValue())
         assertEquals(before.lines.getValue(ExportKind.INCIDENT.file.name).single().node.path("incidentKey"), reopened.node.path("incidentKey"))
+    }
+
+    @Test fun `the committed schema 9 samples read as picasso wrote them - the same digests as schema 8`() {
+        for (run in listOf("run-1", "run-2", "run-3", "run-5a", "run-5b")) {
+            val nine = assertIs<BundleRead.Ready>(ExportSymptoms.read(sample("schema-9/$run")), run)
+            assertEquals("9", strictJson.readTree(nine.manifestJson).path("schemaVersion").textValue())
+            for (line in nine.lines.getValue(ExportKind.INCIDENT.file.name)) {
+                val resolution = line.node.path("resolution")
+                if (resolution.isObject) assertTrue(resolution.has("reworkBasis") && resolution.path("reworkBasis").isNull, "$run ${line.id}")
+            }
+            if (run == "run-3") continue   // no schema 8 copy of run-3 is committed
+            val eight = assertIs<BundleRead.Ready>(ExportSymptoms.read(sample("schema-8/$run")), run)
+            fun digests(r: BundleRead.Ready) = r.lines.getValue(ExportKind.INCIDENT.file.name).map { it.id to it.node.path("digest").textValue() }
+            assertEquals(digests(eight), digests(nine), "$run: the resolution is outside the digest, so schema 9 keeps schema 8's")
+        }
+    }
+
+    @Test fun `a schema 9 reworkBasis out of shape makes the bundle broken`(@TempDir dir: Path) {
+        Files.list(sample("schema-9/run-3")).use { files -> files.forEach { Files.copy(it, dir.resolve(it.fileName)) } }
+        val incidents = dir.resolve("incidents.jsonl")
+        val good = Files.readString(incidents)
+        Files.writeString(incidents, good.replaceFirst(",\"reworkBasis\":null", ""))
+        assertTrue("reworkBasis must be present" in assertIs<BundleRead.Broken>(ExportSymptoms.read(dir)).why)
+        Files.writeString(incidents, good.replaceFirst("\"reworkBasis\":null", "\"reworkBasis\":{\"robotId\":\"hum-04\"}"))
+        assertTrue("reworkBasis.readAt" in assertIs<BundleRead.Broken>(ExportSymptoms.read(dir)).why)
+        Files.writeString(incidents, good)
+        assertIs<BundleRead.Ready>(ExportSymptoms.read(dir))
     }
 
     @Test fun `a schema 8 line out of shape makes the bundle broken`(@TempDir dir: Path) {

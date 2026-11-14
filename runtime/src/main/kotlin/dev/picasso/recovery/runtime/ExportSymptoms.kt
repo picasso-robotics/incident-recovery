@@ -19,15 +19,16 @@ object ExportSymptoms {
      * incident-line fields; a SIGNAL route and a new digest shape, neither of which this reader interprets), "7"
      * (picasso `fde49d1`, same fields; two more `resolution.decision` values) and "8" (picasso fd31c6f, §15.322: incident
      * identity, `decidedBy`, mission version and site settings, three more search outcomes, the manifest's `instanceId`;
-     * same digests). The same list as the diagnosis snapshot's ([Snapshot.SCHEMA_VERSIONS]).
+     * same digests) and "9" (picasso f1dfd94, §15.323: `resolution.reworkBasis`, the key on every given resolution; same
+     * digests). The same list as the diagnosis snapshot's ([Snapshot.SCHEMA_VERSIONS]).
      */
     val SCHEMA_VERSIONS = Snapshot.SCHEMA_VERSIONS
 
     /**
      * Incidents first, then searches: the order picasso writes them, and the order the watcher sends them. A bundle the
      * snapshot's per-version checks refuse ([Snapshot.formatProblems]: a `resolution.decision` its schema cannot carry,
-     * a schema 8 field missing or of the wrong shape) is broken: the format changed under a known version, and no
-     * episode could diagnose that line anyway.
+     * a schema 8 field missing or of the wrong shape, a schema 9 `reworkBasis` out of shape) is broken: the format
+     * changed under a known version, and no episode could diagnose that line anyway.
      */
     fun read(dir: Path): BundleRead {
         val read = Bundles.read(dir, "runId", SCHEMA_VERSIONS, ExportKind.entries.map { it.file })

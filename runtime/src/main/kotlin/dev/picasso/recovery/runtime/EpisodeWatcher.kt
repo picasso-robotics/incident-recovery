@@ -28,7 +28,7 @@ import java.time.Instant
  * Known limit: two export directories carrying the same runId collide on episode keys and eventIds (design §7.1 keys
  * carry no path).
  *
- * An incident line of export schema 8 names its incident (`incidentKey`, picasso §15.322): the first line with a key
+ * An incident line of export schema 8 and later names its incident (`incidentKey`, picasso §15.322): the first line with a key
  * opens (or joins) its episode as any line does, and the run it went to is kept ([WatchStore.keepIncidentEpisode]);
  * every later line with that key — a hold a picasso restart reopened, in another run — goes to that run while its
  * episode is open and to no episode once it has ended (FOLDED), never through signalWithStart. A REOPENED line whose key

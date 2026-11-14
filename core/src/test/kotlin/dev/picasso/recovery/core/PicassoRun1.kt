@@ -28,3 +28,10 @@ val PicassoRun1 = PicassoRun(1)
 /** picasso's restart scene, export schema 8 (§15.322): run-5a's NEW incident, reopened in run-5b with the same incidentKey. */
 val PicassoRestartBefore = PicassoRun("schema-8/run-5a")
 val PicassoRestartAfter = PicassoRun("schema-8/run-5b")
+
+/** The same restart scene as picasso wrote it again under export schema 9 (§15.323): no rework of an attempted failure in it. */
+val PicassoRestart9Before = PicassoRun("schema-9/run-5a")
+val PicassoRestart9After = PicassoRun("schema-9/run-5b")
+
+/** run-3 under export schema 9: a hold reworked (incident-1, basis null), the unit's next attempt confirmed done (incident-2). */
+val PicassoRework = PicassoRun("schema-9/run-3")

@@ -100,6 +100,8 @@ enum class RecordKind {
     OPENED, TRANSITION, SYMPTOM_JOINED, DIAGNOSIS_REQUESTED, DIAGNOSIS_RESULT, PROPOSED, APPROVAL, REDIAGNOSE,
     REVALIDATION, RECHECK, CONFIRMATION, POLICY_REJECTED, IGNORED, POLICY_ADOPTED, ATTEMPT_CLOSED,
     DISPATCH_SENT, DISPATCH_RESULT, EVIDENCE, OUTCOME_CONFIRMED,
+    /** The episode closed because a person reworked every incident it held (export schema 9, [reworkClosure]). */
+    REWORKED,
 }
 
 /** One append-only record (design §13). The payload is a private copy; each read is a fresh copy. */

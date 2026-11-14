@@ -33,7 +33,7 @@ class SnapshotTest {
             val m = manifest.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"$known\"")
             assertEquals(known, Snapshot.parse(m, emptyList(), search).manifest.text("schemaVersion"))
         }
-        for (other in listOf("4", "9")) {
+        for (other in listOf("4", "10")) {
             val m = manifest.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"$other\"")
             assertFailsWith<IllegalArgumentException> { Snapshot.parse(m, emptyList(), search) }
         }
