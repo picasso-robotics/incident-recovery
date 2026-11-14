@@ -45,6 +45,13 @@ internal fun episodeOptions(id: String): WorkflowOptions = WorkflowOptions.newBu
 
 internal fun searchSignal(id: String) = SymptomSignal("search:$id", "SEARCH", Picasso.search(id), 0)
 
+/** The one incident line of a committed schema 8 bundle (`/picasso/schema-8/<run>/`), as the symptom [eventId]. */
+internal fun restartSignal(run: String, eventId: String): SymptomSignal {
+    val text = requireNotNull(Picasso::class.java.getResource("/picasso/schema-8/$run/incidents.jsonl")) { "missing $run" }
+        .readText(Charsets.UTF_8).lines().single { it.isNotBlank() }
+    return SymptomSignal(eventId, "INCIDENT", text, 0)
+}
+
 /** signalWithStart, as the watcher will (design §7.1). */
 internal fun WorkflowClient.openEpisode(
     id: String = "ep:test",

@@ -29,7 +29,7 @@ END
 $$;
 ALTER ROLE incident_recovery_rt PASSWORD :'rt_password';
 
-REVOKE ALL ON episode_event, episode_notice, episode_dispatch, episode_watch_cursor, episode_watch_log FROM incident_recovery_rt;
-GRANT SELECT, INSERT ON episode_event, episode_notice, episode_dispatch, episode_watch_cursor, episode_watch_log TO incident_recovery_rt;
+REVOKE ALL ON episode_event, episode_notice, episode_dispatch, episode_watch_cursor, episode_watch_log, episode_incident_key FROM incident_recovery_rt;
+GRANT SELECT, INSERT ON episode_event, episode_notice, episode_dispatch, episode_watch_cursor, episode_watch_log, episode_incident_key TO incident_recovery_rt;
 REVOKE ALL ON SEQUENCE episode_notice_id_seq, episode_watch_log_id_seq FROM incident_recovery_rt;
 GRANT USAGE, SELECT ON SEQUENCE episode_notice_id_seq, episode_watch_log_id_seq TO incident_recovery_rt;

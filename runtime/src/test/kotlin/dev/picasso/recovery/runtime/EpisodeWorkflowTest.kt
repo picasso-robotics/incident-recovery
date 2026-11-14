@@ -201,6 +201,29 @@ class EpisodeWorkflowTest {
         eventually { records(next.instanceId).firstOrNull { it.kind == "OPENED" && "search:search-2" in it.payload } }
     }
 
+    @Test fun `a line of an incident the ended episode held, arriving while it drains, opens no new episode`() {
+        val gate = CountDownLatch(1)
+        acts.dispatchGate = gate
+        val ep = open(id = "ep:held")
+        val first = ep.until { it.phase == "DISPATCHED" }.instanceId
+        eventually { acts.dispatchedFor.toList().takeIf { first in it } }
+        ep.symptom(restartSignal("run-5a", "incident:before:1"))   // picasso's NEW incident joins this episode
+        ep.until { it.symptoms == 2 }
+        assertEquals("ACCEPTED", ep.takeover(TakeoverRequest("op-1")))
+        assertEquals("ACCEPTED", ep.close(CloseRequest("op-1", "handled on site")))
+        ep.symptom(restartSignal("run-5b", "incident:after:1"))   // the same incidentKey, reopened by picasso's restart
+        gate.countDown()
+        fun status() = env.workflowServiceStubs.blockingStub().describeWorkflowExecution(
+            DescribeWorkflowExecutionRequest.newBuilder()
+                .setNamespace(env.namespace)
+                .setExecution(WorkflowExecution.newBuilder().setWorkflowId("ep:held").setRunId(first.substringAfterLast('/')))
+                .build(),
+        ).workflowExecutionInfo.status
+        val ended = eventually { status().takeIf { it != WorkflowExecutionStatus.WORKFLOW_EXECUTION_STATUS_RUNNING } }
+        assertEquals(WorkflowExecutionStatus.WORKFLOW_EXECUTION_STATUS_COMPLETED, ended, "not continued as new: the same incident")
+        assertTrue(records(first).any { it.kind == "IGNORED" && "SymptomJoined" in it.payload }, "the ended episode recorded it: ${records(first)}")
+    }
+
     @Test fun `a null narrator answer is a failed diagnosis, not a lost event`() {
         narrator.answer = { null }
         val ep = open()

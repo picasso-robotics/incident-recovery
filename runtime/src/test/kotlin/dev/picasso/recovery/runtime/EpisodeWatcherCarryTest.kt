@@ -174,6 +174,7 @@ class EpisodeWatcherCarryTest {
         var failures = 0
         val failing = object : EpisodeSignals {
             override fun open(workflowId: String, start: EpisodeStart, symptom: SymptomSignal): String = error("not used")
+            override fun join(workflowId: String, runId: String, symptom: SymptomSignal): Boolean = error("not used")
             override fun evidence(instanceId: String, signal: EvidenceSignal): Boolean {
                 if (signal.jobResponseId == "resp-2") throw IllegalStateException("temporal down at ${++failures}")
                 return signals.evidence(instanceId, signal)
@@ -193,6 +194,7 @@ class EpisodeWatcherCarryTest {
         carrier.report("resp-1", "PATROL-1", "exec-2").snapshot()
         val failing = object : EpisodeSignals {
             override fun open(workflowId: String, start: EpisodeStart, symptom: SymptomSignal): String = error("not used")
+            override fun join(workflowId: String, runId: String, symptom: SymptomSignal): Boolean = error("not used")
             override fun evidence(instanceId: String, signal: EvidenceSignal): Boolean {
                 if (instanceId == "ep:b/r2" && signal.jobResponseId == "resp-1") throw IllegalStateException("temporal down")
                 return signals.evidence(instanceId, signal)

@@ -30,6 +30,7 @@ import dev.picasso.recovery.core.Phase
 import dev.picasso.recovery.core.PolicyRead
 import dev.picasso.recovery.core.Reply
 import dev.picasso.recovery.core.Step
+import dev.picasso.recovery.core.incidentKeyOf
 import dev.picasso.recovery.core.TriState
 import dev.picasso.recovery.core.startEpisode
 import dev.picasso.recovery.core.transition
@@ -159,8 +160,11 @@ class EpisodeWorkflowImpl : EpisodeWorkflow {
             apply(transition(current(), next.event, read, now()))
         }
         val end = current()
-        // A line the ended episode already had is a redelivery, not a new occurrence.
-        val fresh = late.filter { it.eventId !in end.seenEventIds }.distinctBy { it.eventId }
+        // A line the ended episode already had is a redelivery, not a new occurrence; a line of an incident it already
+        // held (the same picasso incidentKey, export schema 8) is that incident again, not a new one (design §12 구현(판 8)).
+        // Lines before schema 8 carry no key, so this filter keeps what it kept before for them.
+        val held = end.symptoms.mapNotNull { incidentKeyOf(it.line) }.toSet()
+        val fresh = late.filter { it.eventId !in end.seenEventIds && incidentKeyOf(it.toSymptom().line) !in held }.distinctBy { it.eventId }
         if (fresh.isNotEmpty()) {
             // The new episode opens on the first fresh line, so it takes that line's manifest when the watcher sent one;
             // otherwise the one this episode opened with (which may be its first line's, not the start argument's).

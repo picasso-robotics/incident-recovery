@@ -59,6 +59,8 @@ class EpisodeEndToEndTest {
 
     @Test fun `policy v1 - the schema 7 sample opened as the CLI opens it reaches the same dispatch`() = sampleReachesDispatch("schema-7")
 
+    @Test fun `policy v1 - the schema 8 sample opened as the CLI opens it reaches the same dispatch`() = sampleReachesDispatch("schema-8")
+
     private fun sampleReachesDispatch(schema: String) {
         val e = start(v1)
         val sample = Path.of(checkNotNull(javaClass.getResource("/picasso/$schema/run-1/manifest.json")).toURI()).parent

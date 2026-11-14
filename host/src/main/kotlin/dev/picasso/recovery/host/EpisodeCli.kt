@@ -25,10 +25,13 @@ data class OpenSymptom(val workflowId: String, val start: EpisodeStart, val sign
  *
  * Whatever cannot be read is refused with [IllegalArgumentException], never guessed (design §12). The export is read
  * through [ExportSymptoms], as the watcher reads it, so a line the CLI sends is a line the watcher would send, with the
- * same `eventId`. So the manifest needs a known `schemaVersion` ("5", "6" or "7") and `counts`; lines past `counts` are
- * not read; and one line that cannot be read in either jsonl file (or carries a decision its schema cannot carry) blocks
- * the open — a broken incident line blocks a `--search` too. JSON
+ * same `eventId`. So the manifest needs a known `schemaVersion` ("5", "6", "7" or "8") and `counts`; lines past `counts`
+ * are not read; and one line that cannot be read in either jsonl file (or that its schema's checks refuse: a decision it
+ * cannot carry, a schema 8 field out of shape) blocks the open — a broken incident line blocks a `--search` too. JSON
  * is read as strictly as the core reads it (duplicate keys refused). What cannot be read is refused, not skipped.
+ *
+ * The CLI does not fold by `incidentKey` (export schema 8) as the watcher does: it has no store of which episode a key
+ * went to, and the person picks the episode (`--key`). Opening a reopened line by hand starts an episode for it.
  */
 object EpisodeCli {
     /** Workflow ids are `ep:<key>`. The control plane puts the id in one path segment, so no `/`, `;`, `%` or `?`. */

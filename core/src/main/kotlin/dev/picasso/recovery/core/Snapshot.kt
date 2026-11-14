@@ -25,11 +25,9 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
         }
         require(incidents.isNotEmpty() || searches.isNotEmpty()) { "a snapshot needs at least one incident or search line" }
         incidents.forEach { require(!it.text("digest").isNullOrBlank()) { "incident line without digest: ${it.get("incidentId")}" } }
-        val strange = unknownDecisions(sv.textValue(), incidents)
-        require(strange.isEmpty()) {
-            "export schema ${sv.textValue()} carries resolution.decision ${DECISIONS[sv.textValue()]}, was $strange"
-        }
         searches.forEach { require(!it.text("searchId").isNullOrBlank()) { "search line without searchId" } }
+        val problems = formatProblems(sv.textValue(), manifest, incidents, searches)
+        require(problems.isEmpty()) { "export schema ${sv.textValue()}: ${problems.joinToString("; ")}" }
     }
 
     fun toJson(): ObjectNode = mapper.createObjectNode().apply {
@@ -41,11 +39,14 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
     companion object {
         /**
          * The picasso export schemas narrator reads (contract 0.6 §3): "5", "6" since narrator `376d082` (2026-10-08),
-         * and "7" since narrator `d4df329` (2026-11-14, branch `chore/picasso-export-7`, not yet on narrator main when this
-         * was written) — the same list as this module's export reader. "7" (picasso §15.320, main fde49d1) keeps every
-         * field and adds two values to an incident line's `resolution.decision` ([DECISIONS]).
+         * "7" since narrator `e030b80` (2026-11-14, narrator main `17265db`), and "8" — the same list as this
+         * module's export reader. "7" (picasso §15.320, main fde49d1) keeps every field and adds two values to an
+         * incident line's `resolution.decision` ([DECISIONS]). "8" (picasso §15.322, the audit export bundle,
+         * `feat/audit-export-bundle` fd31c6f) adds fields ([formatProblems]); narrator's reading of "8" is on its branch
+         * `chore/picasso-export-8`, not on narrator main when this was written: until it is, a schema 8 episode's
+         * diagnosis fails as a contract mismatch and goes to a person (DIAGNOSIS_FAILED).
          */
-        val SCHEMA_VERSIONS = setOf("5", "6", "7")
+        val SCHEMA_VERSIONS = setOf("5", "6", "7", "8")
 
         /**
          * The values an incident line's `resolution.decision` may carry in each export schema (picasso
@@ -60,7 +61,89 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
             "5" to setOf("REWORK", "CONFIRM_DONE"),
             "6" to setOf("REWORK", "CONFIRM_DONE"),
             "7" to setOf("REWORK", "CONFIRM_DONE", "OPERATOR_CANCEL", "REMEDY_APPLIED"),
+            "8" to setOf("REWORK", "CONFIRM_DONE", "OPERATOR_CANCEL", "REMEDY_APPLIED"),
         )
+
+        /**
+         * The remedy-search `outcome`s export schema "8" adds (picasso §15.322): the cell could not see the source a unit
+         * asked to observe, the destination is taken, the cell said nothing about the destination. Answers that wait for
+         * a person to check or clear the place, never a remedy to approve: picasso writes no `steps` key, and
+         * [projectCandidates] offers no candidate for them (only FOUND becomes APPROVE_REMEDY). Carried verbatim into the
+         * diagnosis snapshot; a line of an older schema carrying one is a changed format.
+         */
+        val PERSON_PLACE_OUTCOMES = setOf("SOURCE_UNOBSERVED", "DESTINATION_OCCUPIED", "DESTINATION_UNOBSERVED")
+
+        /** `openingKind` of a schema "8" incident line: opened by this picasso instance, or reopened by its restart. */
+        val OPENING_KINDS = setOf("NEW", "REOPENED")
+
+        /**
+         * Why [manifest] and the lines cannot be read as export schema [version] — empty when they can. The same checks
+         * for the diagnosis snapshot and the export reader (`ExportSymptoms.read`), as narrator applies them in its
+         * contract check:
+         * - every schema: `resolution.decision` within [DECISIONS]; a search `outcome` of [PERSON_PLACE_OUTCOMES] only
+         *   from "8", and never with a `steps` key (it is not approvable);
+         * - "8" (picasso `LedgerExport`, fd31c6f): the manifest's `instanceId`; on each incident line `openingKind`
+         *   ([OPENING_KINDS]), `attempt` (an integer ≥ 0), `incidentKey` and `firstOpenedAt` (keys present, null together:
+         *   null is a hold reopened from an older judgement record, whose link is unknown — so only on a REOPENED line),
+         *   `resolution.decidedBy {id, kind}` whenever a resolution is given, and on `intent` `missionVersion` (an integer
+         *   or null) and the site settings `siteSettingsVersion` · `inDoubtGrace` · `stallWindow`, null together or present
+         *   together (picasso's encoder asserts it).
+         * Only the shape is checked. `incidentKey` is opaque and never taken apart; `attempt` is not read beyond this.
+         */
+        fun formatProblems(version: String, manifest: JsonNode, incidents: List<JsonNode>, searches: List<JsonNode>): List<String> {
+            val problems = mutableListOf<String>()
+            val strange = unknownDecisions(version, incidents)
+            if (strange.isNotEmpty()) problems += "resolution.decision must be one of ${DECISIONS[version]}, was $strange"
+            for (s in searches) {
+                val outcome = s.text("outcome") ?: continue
+                if (outcome !in PERSON_PLACE_OUTCOMES) continue
+                val id = s.get("searchId")
+                if (version != "8") problems += "search $id: outcome $outcome comes only from schema 8"
+                if (s.has("steps")) problems += "search $id: outcome $outcome carries steps, it is never an approvable remedy"
+            }
+            if (version != "8") return problems
+            if (manifest.text("instanceId").isNullOrBlank()) problems += "manifest.instanceId must be a non-blank string"
+            for (i in incidents) problems += incidentProblems8(i).map { "incident ${i.get("incidentId")}: $it" }
+            return problems
+        }
+
+        private fun incidentProblems8(i: JsonNode): List<String> {
+            val p = mutableListOf<String>()
+            val opening = i.text("openingKind")
+            if (opening !in OPENING_KINDS) p += "openingKind must be one of $OPENING_KINDS, was ${i.get("openingKind")}"
+            val attempt = i.get("attempt")
+            if (attempt == null || !attempt.isIntegralNumber || !attempt.canConvertToInt() || attempt.intValue() < 0)
+                p += "attempt must be an integer >= 0, was $attempt"
+            fun nullOrText(key: String, node: JsonNode = i): Boolean =
+                node.has(key) && (node.get(key).isNull || (node.get(key).isTextual && node.get(key).textValue().isNotBlank()))
+            fun nullOrInt(key: String, node: JsonNode): Boolean =
+                node.has(key) && (node.get(key).isNull || (node.get(key).isIntegralNumber && node.get(key).canConvertToInt()))
+            if (!nullOrText("incidentKey")) p += "incidentKey must be null or a non-blank string, was ${i.get("incidentKey")}"
+            if (!nullOrText("firstOpenedAt")) p += "firstOpenedAt must be null or a non-blank string, was ${i.get("firstOpenedAt")}"
+            val keyNull = i.get("incidentKey")?.isNull ?: false
+            val firstNull = i.get("firstOpenedAt")?.isNull ?: false
+            if (keyNull != firstNull) p += "incidentKey and firstOpenedAt must be null together"
+            if (keyNull && opening == "NEW") p += "a NEW incident always has an incidentKey"
+            val resolution = i.get("resolution")
+            if (resolution != null && resolution.isObject) {
+                val by = resolution.get("decidedBy")
+                if (by == null || !by.isObject || by.text("id").isNullOrBlank() || by.text("kind").isNullOrBlank())
+                    p += "resolution.decidedBy must be {id, kind} when a resolution is given, was $by"
+            }
+            val intent = i.get("intent")
+            if (intent == null || !intent.isObject) {
+                p += "intent must be an object, was $intent"
+            } else {
+                if (!nullOrInt("missionVersion", intent)) p += "intent.missionVersion must be an integer or null, was ${intent.get("missionVersion")}"
+                val settings = listOf(
+                    nullOrInt("siteSettingsVersion", intent), nullOrText("inDoubtGrace", intent), nullOrText("stallWindow", intent),
+                )
+                if (!settings.all { it }) p += "intent.siteSettingsVersion must be an integer or null, inDoubtGrace and stallWindow strings or null"
+                else if (listOf("siteSettingsVersion", "inDoubtGrace", "stallWindow").map { intent.get(it).isNull }.distinct().size != 1)
+                    p += "intent.siteSettingsVersion, inDoubtGrace and stallWindow must be null together or present together"
+            }
+            return p
+        }
 
         /**
          * The `resolution.decision` values in [incidents] that export schema [version] cannot carry (empty when all

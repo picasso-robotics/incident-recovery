@@ -6,9 +6,11 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import io.grpc.StatusRuntimeException
 import dev.picasso.recovery.core.Correlation
 import dev.picasso.recovery.core.CorrelationRule
+import dev.picasso.recovery.core.IncidentLink
 import dev.picasso.recovery.core.PolicyParse
 import dev.picasso.recovery.core.SymptomKind
 import dev.picasso.recovery.core.correlate
+import dev.picasso.recovery.core.incidentLink
 import dev.picasso.recovery.core.parsePolicy
 import java.io.IOException
 import java.nio.file.Path
@@ -25,6 +27,12 @@ import java.time.Instant
  * spelling of the same directory that resolves elsewhere would be a new source and send its lines again.
  * Known limit: two export directories carrying the same runId collide on episode keys and eventIds (design §7.1 keys
  * carry no path).
+ *
+ * An incident line of export schema 8 names its incident (`incidentKey`, picasso §15.322): the first line with a key
+ * opens (or joins) its episode as any line does, and the run it went to is kept ([WatchStore.keepIncidentEpisode]);
+ * every later line with that key — a hold a picasso restart reopened, in another run — goes to that run while its
+ * episode is open and to no episode once it has ended (FOLDED), never through signalWithStart. A REOPENED line whose key
+ * is null (link unknown) opens its own episode as before and says so (LINK_UNKNOWN): it is never linked by a guess.
  *
  * Known limit: a line whose signal always fails — Temporal refusing it for good (INVALID_ARGUMENT for an oversized
  * payload), or an instance whose `view()` query keeps failing — stops the pass at that line at every poll: the later
@@ -74,6 +82,7 @@ class EpisodeWatcher(
             is BundleRead.NotReady -> { once("$dir", "NOT_READY", "why" to r.why); return Carried(0, stopped = false) }
             is BundleRead.Broken -> { once("$dir", "BROKEN", "why" to r.why); return Carried(0, stopped = false) }
         }
+        val schema = strictJson.readTree(export.manifestJson).path("schemaVersion").textValue()
         var opened = 0
         for (kind in ExportKind.entries) {
             val source = "$dir#${kind.file.name}"
@@ -85,17 +94,43 @@ class EpisodeWatcher(
                     once(source, "BROKEN", "runId" to export.runId, "id" to line.id, "why" to "no digest: no eventId")
                     break
                 }
+                val link = if (kind == ExportKind.INCIDENT) incidentLink(schema, line.node) else IncidentLink.NotCarried
+                val earlier = (link as? IncidentLink.Keyed)?.let { store.incidentEpisode(it.key) }
+                if (link is IncidentLink.Keyed && earlier != null) {
+                    // The same incident as a line already carried: its episode, never a new one (design §12 구현(판 8)).
+                    val joined = try {
+                        signals.join(earlier.workflowId, earlier.runId, symptom)
+                    } catch (e: RuntimeException) {
+                        signalFailed(source, e, export.runId, line.position, "id" to line.id, "eventId" to symptom.eventId)
+                        return Carried(opened, stopped = true)
+                    }
+                    once(source, "FOLDED", "eventId" to symptom.eventId, "incidentKey" to link.key,
+                        "openingKind" to if (link.reopened) "REOPENED" else "NEW",
+                        "workflowId" to earlier.workflowId, "runId" to earlier.runId, "firstEventId" to earlier.eventId,
+                        "episode" to if (joined) "RUNNING" else "ENDED",
+                        key = "${export.runId}|${line.position}")
+                    store.advance(source, export.runId, line.position, line.id)
+                    opened++
+                    continue
+                }
                 val correlation = correlate(SymptomKind.valueOf(kind.name), line.node, export.runId, line.id, rules)
                 if (correlation == null) {
                     once(source, "STUCK", "runId" to export.runId, "id" to line.id, "why" to "no valid key")
                     break
                 }
-                try {
-                    signals.open("ep:${correlation.key}", EpisodeStart(export.manifestJson), symptom)
+                val workflowId = "ep:${correlation.key}"
+                val runId = try {
+                    signals.open(workflowId, EpisodeStart(export.manifestJson), symptom)
                 } catch (e: RuntimeException) {
                     signalFailed(source, e, export.runId, line.position, "id" to line.id, "eventId" to symptom.eventId)
                     return Carried(opened, stopped = true)
                 }
+                // Before the cursor moves: a line sent again after a failure here finds its own row, or writes it then.
+                if (link is IncidentLink.Keyed) store.keepIncidentEpisode(link.key, workflowId, runId, symptom.eventId)
+                if (link == IncidentLink.LinkUnknown)
+                    once(source, "LINK_UNKNOWN", "eventId" to symptom.eventId, "key" to correlation.key,
+                        "why" to "REOPENED with incidentKey null: a hold reopened from an older judgement record; not linked to any earlier episode, and may repeat one",
+                        key = "${export.runId}|${line.position}")
                 // Said only once the symptom was delivered, and once per line: an outage that sends it again adds no row.
                 if (correlation is Correlation.Own && correlation.related.isNotEmpty())
                     once(source, "AMBIGUOUS", "eventId" to symptom.eventId, "key" to correlation.key, "related" to correlation.related,

@@ -84,7 +84,7 @@ open class EpisodeStore(private val connect: () -> Connection) : EpisodeReader {
          */
         val SCHEMA_OBJECTS = listOf(
             "episode_event", "episode_notice", "episode_dispatch", "episode_watch_cursor", "episode_watch_log",
-            "episode_notice_instance", "episode_dispatch_instance", "episode_event_intent_order",
+            "episode_incident_key", "episode_notice_instance", "episode_dispatch_instance", "episode_event_intent_order",
         )
     }
 
