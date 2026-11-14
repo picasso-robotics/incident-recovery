@@ -576,7 +576,8 @@ Update 의 답(`Reply`, 거절도 값)이다. PROPOSED 는 순간 상태라 `Pha
     에피소드에 넣을 수 있다.
 - CLI 는 이제 감시자와 같은 `ExportSymptoms` · `Bundles` 로 읽는다(§12 구현(C1)). 그래서 CLI 가 보내는 줄은 감시자가 보낼 줄이고,
   `eventId` 도 같다.
-  - manifest 에 `schemaVersion "5"` · `"6"` · `"7"` 중 하나와 `counts` 가 있어야 한다. 인시던트 줄의 `resolution.decision` 이 그 버전이 들 수 없는 값이면 열지 않는다(§12).
+  - manifest 에 `schemaVersion "5"` · `"6"` · `"7"` · `"8"` 중 하나와 `counts` 가 있어야 한다. 그 버전의 대조(`Snapshot.formatProblems`)에 걸리는 줄 — 들 수 없는 `resolution.decision`, 모양이 틀린 버전 8 칸 — 이 있으면 열지 않는다(§12).
+  - CLI 는 `incidentKey` 로 접지 않는다(§12 구현(버전 8)). 키의 첫 에피소드를 적어 두는 곳이 없고, 에피소드는 사람이 `--key` 로 고른다.
   - `counts` 뒤의 줄은 읽지 않는다.
   - 두 jsonl 파일 어디든 깨진 줄이나 겹친 id 가 있으면 열지 않는다. 깨진 사건 줄은 `--search` 도 막는다.
   - 묶음이 아직 다 쓰이지 않았으면(manifest 없음, 줄이 모자람, 읽는 사이 manifest 가 바뀜) 사유 한 줄과 「not ready yet; read again once
@@ -880,9 +881,9 @@ catalog)** 에 선언한다. 항목: 사가 정의 `name@x.y.z`, 값의 출처(�
 ### 9.0 진단 스냅샷의 모양
 
 - `snapshot.manifest` 는 picasso 가 쓴 `manifest.json` 의 칸을 **전부 그대로** 싣는다(`schemaVersion` · `runId` · `writtenAt` ·
-  `virtualNow` · `contractSemver` · `counts`). 형도 바꾸지 않는다 — 예: `schemaVersion` 은 글자 `"5"` · `"6"` · `"7"` 중 하나다(`"7"` 은 narrator `d4df329`, 2026-11-14 브랜치 `chore/picasso-export-7` 부터). narrator 는 아는 버전만 읽고
+  `virtualNow` · `contractSemver` · `counts`). 형도 바꾸지 않는다 — 예: `schemaVersion` 은 글자 `"5"` · `"6"` · `"7"` · `"8"` 중 하나다(`"7"` 은 narrator `e030b80`(main `17265db`)부터, `"8"` 은 narrator 브랜치 `chore/picasso-export-8` 이 main 에 들어간 뒤부터). narrator 는 아는 버전만 읽고
   다른 버전이면 비재시도 예외로 멈춘다(§8.1 의 "계약 판 불일치" 와 같은 갈래 → `DIAGNOSIS_FAILED`).
-  인시던트 줄 `resolution.decision` 도 버전마다 아는 값만 받는다(`"5"` · `"6"` 은 `REWORK` · `CONFIRM_DONE`, `"7"` 은 여기에 `OPERATOR_CANCEL` · `REMEDY_APPLIED`).
+  인시던트 줄 `resolution.decision` 도 버전마다 아는 값만 받는다(`"5"` · `"6"` 은 `REWORK` · `CONFIRM_DONE`, `"7"` · `"8"` 은 여기에 `OPERATOR_CANCEL` · `REMEDY_APPLIED`). 버전 8 의 칸 대조는 §12 구현(버전 8)이다.
   스냅숏도 같은 표(`Snapshot.DECISIONS`)로 막는다. `REMEDY_APPLIED` 는 「회복 완료」가 아니다 — 사람이 회복 제안을 승인해 조치가 그 단위 앞에 끼었다는 것뿐이고, 결과는 뒤의 인시던트 · 작업 응답이 말한다.
   판단이 실린 인시던트 줄(네 값 모두)은 운영자 판단 후보를 내지 않는다(§9.1).
 - `snapshot.incidents` · `snapshot.searches` 는 **에피소드를 연 줄을 각 목록의 첫째**에 둔다. narrator 는 v1 에서 incidents 의 첫째를
@@ -1243,7 +1244,7 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
 
 *읽기 (`Bundles`).* 내보내기만 이 읽개를 쓴다. 결과 통보는 `ResultExportFile`(아래 구현(C2)). picasso `BundleWriter` 의 규율(jsonl 먼저, `manifest.json` 마지막, 각각 이름 바꾸기)을 전제한다.
 - manifest 가 없으면 아직이다(`NotReady`, 다음 폴링에 다시). manifest 는 1 MiB, 줄 파일은 64 MiB 까지만 읽는다. 넘으면 깨짐(`Broken`)이다.
-- manifest 의 `schemaVersion` 이 아는 버전이어야 한다(내보내기 manifest `"5"` · `"6"` · `"7"`. 결과 통보는 manifest 가 없고 줄마다 버전 `"1"` 을 든다 — 아래 구현(C2)). run 칸(`runId`)과
+- manifest 의 `schemaVersion` 이 아는 버전이어야 한다(내보내기 manifest `"5"` · `"6"` · `"7"` · `"8"`. 결과 통보는 manifest 가 없고 줄마다 버전 `"1"` 을 든다 — 아래 구현(C2)). run 칸(`runId`)과
   `counts` 가 있어야 한다.
 - 내보내기(`ExportSymptoms`)는 다 읽은 뒤 인시던트 줄의 `resolution.decision` 을 그 버전이 들 수 있는 값(`Snapshot.DECISIONS`, §9.0)과 대조한다.
   모르는 값이 하나라도 있으면 깨짐이다 — 아는 버전을 밝히고 모르는 값을 실은 줄은 형식이 바뀐 것이고, 그 줄로는 진단 스냅숏도 서지 않는다.
@@ -1290,6 +1291,8 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
 | `ROUTE_ENDED` | 그 주문의 인스턴스가 더는 받지 않는다(끝남, 다음 run 으로 넘어감) |
 | `SIGNAL_FAILED` | Temporal 이 신호를 받지 않았다. 어느 줄인지 적는다: `runId`, `position`, 줄의 `id`, 증상이면 `eventId`, 근거면 보내던 `instanceId` |
 | `POLICY_UNUSABLE` | 정책 파일을 쓸 수 없다, 그리고 무엇을 쓰는지(마지막 유효 규칙 / 규칙 없음) |
+| `FOLDED` | 버전 8 사건 줄의 `incidentKey` 가 이미 나른 줄의 것이다 — 그 에피소드에 합류했거나(`episode: RUNNING`) 그 에피소드가 끝나 아무 데도 열지 않았다(`episode: ENDED`). §12 구현(버전 8) |
+| `LINK_UNKNOWN` | 버전 8 의 `REOPENED` 줄인데 `incidentKey` 가 널이다 — 제 에피소드를 열었고 앞 에피소드에 잇지 않았다 |
 
 - detail 이 jsonb 에 들지 않으면(NUL, 짝 없는 서로게이트 — SQLState 22 계열) 같은 원천 · 종류로 `{"unstorable":true}` 행을 쓴다.
   `BROKEN` 의 사유는 믿을 수 없는 줄 글을 옮기므로, 기록이 제 내용 때문에 막히지 않게 한다.
@@ -1374,6 +1377,29 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
 끝내는 것, picasso 가 기체를 아직 못 본(`UNSPECIFIED`) 통보는 끝내지 않고 다음 ONLINE 통보가 끝내는 것, 다른 인스턴스의 같은 `executionId`
 통보는 기록만 되는 것.
 
+
+**구현(버전 8, 2026-11-14).**
+- `incident-recovery`는 picasso `LedgerExport` 내보내기 스키마 버전 `"8"`(picasso 브랜치 `feat/audit-export-bundle`, 커밋 `fd31c6f`, picasso §15.322 감사 내보내기 번들)을 읽는다. 이제 읽는 버전은 `"5"`, `"6"`, `"7"`, `"8"`이다. 같은 시드의 `digest` 는 버전 7 과 같으며, 중복 제거 키인 `eventId`(`incident:<runId>:<digest>`, `search:<runId>:<searchId>`)는 바뀌지 않는다.
+- 버전 8 추가 항목: 인시던트 줄의 `incidentKey`(불투명 문자열 또는 null), `firstOpenedAt`, `openingKind`(`NEW` 또는 `REOPENED`), `attempt`, `resolution.decidedBy {id, kind}`, `intent.missionVersion`, 평평하게 실린 `intent.siteSettingsVersion` · `inDoubtGrace` · `stallWindow`다. 매니페스트의 `instanceId`와 조치 탐색 결과 3종(`SOURCE_UNOBSERVED`, `DESTINATION_OCCUPIED`, `DESTINATION_UNOBSERVED`)도 추가되었다.
+- 버전별 엄격한 형식 검사는 단일 함수 `Snapshot.formatProblems`로 수행한다. 진단 스냅숏(실패 시 `DIAGNOSIS_FAILED`로 이관)과 내보내기 리더 `ExportSymptoms.read`(실패 시 번들을 `BROKEN` 처리)가 함께 사용한다.
+- 버전 8 형식 검사 요구조건: 매니페스트 `instanceId`는 공백이 아니어야 한다. `openingKind`는 `NEW` 또는 `REOPENED`여야 하고, `attempt`는 0 이상의 정수여야 한다. `incidentKey`와 `firstOpenedAt` 키는 반드시 존재하고 함께 null이어야 하며, `NEW` 줄은 항상 키를 가져야 한다. `resolution`이 주어지면 `resolution.decidedBy`는 `{id, kind}` 형태여야 한다. `intent`는 객체여야 하고 `missionVersion`은 정수 또는 null이어야 하며 세 사이트 설정은 함께 null이거나 함께 존재해야 한다.
+- 전 버전 공통 검사: 세 가지 새 탐색 결과는 버전 8부터만 허용하며 `steps` 키를 결코 가질 수 없다. 오직 형태만 검사하며, `incidentKey`는 분해하지 않는다.
+- 해결된 문제: 이벤트 id 에 구동(`runId`)이 들어가므로, picasso 재기동으로 다시 열린 보류(`REOPENED`, 다른 구동, 다른 `digest`, 같은 `incidentKey`)에 대해 동일 보류임에도 두 번째 복구 에피소드가 열리던 문제를 해결한다.
+- 접기(fold)는 감시자(`EpisodeWatcher`)의 에피소드 개설 결정 시점에 둔다. 수신 멱등성을 위한 이벤트 id 는 그대로 유지한다:
+  - 키를 가진 첫 줄은 일반 줄처럼 에피소드를 열거나 참여한다(병합 규칙 / 자체 키). 감시자는 그 줄이 간 run 을 추가 전용 테이블 `episode_incident_key`(`incident_key` 기본키, `workflow_id`, `run_id`, `event_id`, `at`)에 기록한다. Temporal이 시그널을 수신한 뒤 커서가 전진하기 전에 쓰며, 최초 작성자가 이긴다.
+  - 동일 키의 후속 줄은 `EpisodeSignals.join`으로 보낸다. 그 run 에 고정한 `symptom` 신호이며, 그 run 이 워크플로의 지금 run 이고 RUNNING 이며 에피소드가 끝나지 않았을 때만 보낸다. `signalWithStart`는 쓰지 않는다.
+  - 에피소드가 열려 있으면 줄은 에피소드에 합류한다(감시 기록 `FOLDED`, `episode: RUNNING`). 이미 끝났다면 에피소드를 열지 않고 처리된 줄로 넘긴다(감시 기록 `FOLDED`, `episode: ENDED`). 사람이 감시 기록을 읽는다.
+  - 워크플로 내부 방어: 끝난 run 이 비우는 동안(§7.1), 종료된 에피소드가 이미 가진 `incidentKey`를 실은 늦은 증상은 워크플로를 이어 시작(continue-as-new)하지 않는다. 버전 8 이전 줄은 키가 없으므로 커밋된 이력은 변경 없이 그대로 재생된다.
+- 연결 미확인(link unknown): `incidentKey`가 null인 `REOPENED` 줄(이전 판정 기록에서 다시 열린 경우)은 이전처럼 자체 에피소드를 연다(구동 · 단위 · 분류로 추측해 잇지 않음). 감시자는 줄당 한 번 감시 기록 `LINK_UNKNOWN`(`eventId`, `key`, `why`)을 남긴다. 이후 재기동에서 같은 보류로 줄이 추가될 수 있으며, 매번 로그를 남기되 새 인시던트로 집계하지도 않고 접지도 않는다.
+- `attempt`는 형태 검사 외에는 읽지 않는다. 재발 판정용 재료일 뿐 연결 고리가 아니다.
+- 세 가지 새 탐색 결과는 승인 대상이 될 수 없다. 후보 투영(`projectCandidates`)은 `FOUND`에서만 `APPROVE_REMEDY`를 생성한다. 세 결과 줄은 진단 스냅숏에 있는 그대로 실리며 후보를 내지 않는다(사람이 그 자리를 확인하거나 치우기를 기다린다).
+- `decidedBy`: `incident-recovery`는 `decidedBy.id`도 `kind`도 읽지 않는다. 에피소드 기록(감사 기록)과 진단 스냅숏(§9.0 원문 유지 규칙)에 줄을 있는 그대로 보존한다. narrator 수신기는 문장 생성 입력에 `kind` 만 넘긴다(narrator 인계 노트). `incident-recovery`는 이를 바탕으로 어떤 문구도 만들지 않는다.
+- 개발용 CLI는 접기를 수행하지 않는다. 키 저장소가 없으며, 사람이 `--key`로 에피소드를 직접 고른다.
+- 알려진 한계: 첫 줄이 비우는 중인 run 에 닿아 이어 시작한 run 을 연 경우, 적어 둔 run id 는 앞 run 의 것이므로 동일 키의 후속 줄은 ENDED로 접힌다(보수적 처리: 합류도 새 에피소드도 없음). reset 한 run 은 새 run id 를 받으므로 마찬가지로 끝난 것으로 처리된다. 감시자가 본 적 없는 키를 가진 `REOPENED` 줄(첫 줄이 이 데이터베이스에 들어온 적 없음)은 새 에피소드를 열고 그 키의 첫 에피소드가 된다.
+- 반영 순서: narrator의 버전 8 읽기(narrator 브랜치 `chore/picasso-export-8`)가 먼저 병합되어야 한다. 그전까지는 버전 8 에피소드 진단이 규약 불일치로 실패하고 사람에게 간다(`DIAGNOSIS_FAILED`).
+- 데이터베이스: 이번 변경 전에 설치된 데이터베이스는 소유자 계정으로 `episode-schema.sql`을 적용한 뒤 `scripts/db-roles.sql`을 다시 실행해야 한다(런타임 역할에 `episode_incident_key`의 SELECT, INSERT 권한 부여). 그렇지 않으면 런타임 역할의 시작 점검이 "apply episode-schema.sql as the owner first"와 함께 멈춘다.
+- 커밋된 샘플: `runtime/src/test/resources/picasso/schema-8/`에 picasso의 `run-1`, `run-2`, `run-5a`, `run-5b` 바이트 복사본이 들어 있다(`run-5a`·`run-5b`는 재기동 장면이며 `NEW` 인시던트 1건과 새 결과의 탐색 3건 뒤 동일 보류가 같은 `incidentKey`로 `REOPENED`됨). `core/src/test/resources/picasso/schema-8/`에는 `run-5a`·`run-5b`가 들어 있다.
+
 ---
 
 ## 13. 기록 (R11)
@@ -1406,7 +1432,7 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
   추가 전용 — 나아갈 때마다 행을 하나 더하고, 커서는 자리가 가장 큰 행이다. `WatchStore.advance` 는 지금 자리 + 1 을 넘는 자리(빈틈)와 이미 있는
   자리의 다른 id 를 거절한다. 빈틈 검사는 잠금 없이 읽고 쓴다 — 한 (원천, run)은 감시자 하나가 옮긴다. 둘이 겨루어도 기본 키가 한 자리의
   두 id 를 막는다.
-- `episode_watch_log(id bigserial, source, kind, detail jsonb, at)`. 감시 기록이다(종류 여덟은 §12 구현(C1)). jsonb 가 detail 을 담지 못하면(SQLState 22 계열) `{"unstorable":true}` 로 대신 쓴다 —
+- `episode_watch_log(id bigserial, source, kind, detail jsonb, at)`. 감시 기록이다(종류 열은 §12 구현(C1) · 구현(버전 8)). jsonb 가 detail 을 담지 못하면(SQLState 22 계열) `{"unstorable":true}` 로 대신 쓴다 —
   `episode_event` 의 `RecordUnstorable`(위 알려진 한계)과 달리 기록이 멈추지 않는다.
 - 색인 `episode_event_intent_order`: `DISPATCH_INTENT` 기록의 `payload -> 'candidate' -> 'ref' ->> 'jobOrderId'`(부분 색인). 결과 통보가 주문으로
   인스턴스를 찾는다(§12). 이미 있는 DB 에서는 이 줄 뒤 첫 시작이 색인을 만들며 그동안 `episode_event` 쓰기를 붙든다 — PoC 규모라 받아들인다.
@@ -1422,9 +1448,9 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
   되돌린다.
 - 역할이 스키마에 `CREATE` 할 수 있으면 스크립트가 거절한다. 그런 역할은 감사 표를 만들고 가질 수 있다. 먼저 `public` 의 `CREATE` 를
   PUBLIC 에서 회수한다(Postgres 15 전에는 PUBLIC 에 있다).
-- 표마다 `REVOKE ALL` 한 뒤 준다. 다섯 표에 `SELECT` · `INSERT`, 두 시퀀스(`episode_notice_id_seq`, `episode_watch_log_id_seq`)에
+- 표마다 `REVOKE ALL` 한 뒤 준다. 여섯 표(버전 8 의 `episode_incident_key` 포함)에 `SELECT` · `INSERT`, 두 시퀀스(`episode_notice_id_seq`, `episode_watch_log_id_seq`)에
   `USAGE` · `SELECT` 만이다. `UPDATE` · `DELETE` · `TRUNCATE` 는 없다.
-- 시험(Testcontainers): 다섯 표 모두에서 `UPDATE` · `DELETE` · `TRUNCATE` 가 42501 로 거절된다. 실제 `EpisodeStore` · `WatchStore` 의
+- 시험(Testcontainers): 여섯 표 모두에서 `UPDATE` · `DELETE` · `TRUNCATE` 가 42501 로 거절된다. 실제 `EpisodeStore` · `WatchStore` 의
   메서드는 모두 그 역할로 돈다. 표 목록은 셋이 서로 붙들린다 — `SCHEMA_OBJECTS`, `episode-schema.sql`, 스크립트.
 - `EpisodeStore.ensureSchema()` 는 `CREATE` 권한이 아니라 소유로 정한다.
   - 객체가 다 있으면: 사용자가 `episode_event` 의 소유 역할이거나 그 역할에 속하면 스키마 스크립트를 돌린다(전처럼 멱등). 아니면 있는지만

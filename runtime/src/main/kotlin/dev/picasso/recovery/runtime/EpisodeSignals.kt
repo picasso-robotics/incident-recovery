@@ -1,5 +1,6 @@
 package dev.picasso.recovery.runtime
 
+import dev.picasso.recovery.core.Phase
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.temporal.api.common.v1.WorkflowExecution
@@ -23,6 +24,13 @@ interface EpisodeSignals {
      * sends [symptom] to it. Returns the run id. Throws when Temporal does not take it.
      */
     fun open(workflowId: String, start: EpisodeStart, symptom: SymptomSignal): String
+
+    /**
+     * The `symptom` signal to run [runId] of [workflowId] — only while it is the workflow's current run, running, and
+     * its episode has not ended. False otherwise: never starts a run, so a line of an incident whose episode is over
+     * opens no new episode (design §12 구현(판 8)). Throws when Temporal does not answer.
+     */
+    fun join(workflowId: String, runId: String, symptom: SymptomSignal): Boolean
 
     /**
      * The `evidence` signal to episode instance [instanceId] (`<workflowId>/<run>`, design §7.1) — only while the
@@ -54,6 +62,19 @@ class TemporalEpisodeSignals(private val client: WorkflowClient) : EpisodeSignal
     override fun evidence(instanceId: String, signal: EvidenceSignal): Boolean {
         val run = current(instanceId.substringBeforeLast('/')) ?: return false
         return send(run, instanceId, signal)
+    }
+
+    /**
+     * As [evidence] reaches an instance: describe, a stub pinned to that run, check, send on that run. A run whose
+     * episode has ended but which is still draining (status RUNNING, design §7.1) would open a new episode on a symptom
+     * (continue-as-new): it is not sent to. Should it end between the check and the signal, the workflow itself does not
+     * start a new episode on a line whose `incidentKey` the ended episode already holds.
+     */
+    override fun join(workflowId: String, runId: String, symptom: SymptomSignal): Boolean {
+        val run = current(workflowId) ?: return false
+        if (run.runId != runId) return false
+        if (Phase.entries.firstOrNull { it.name == run.view.phase }?.terminal == true) return false
+        return signalRun(run, SYMPTOM_SIGNAL, symptom)
     }
 
     /**
@@ -91,13 +112,18 @@ class TemporalEpisodeSignals(private val client: WorkflowClient) : EpisodeSignal
      */
     internal fun send(run: PinnedRun, instanceId: String, signal: EvidenceSignal): Boolean {
         if (run.view.instanceId != instanceId) return false
+        return signalRun(run, EVIDENCE_SIGNAL, signal)
+    }
+
+    /** Sends [value] as signal [name] on [run] — that run only; false when it has ended since the check. */
+    private fun signalRun(run: PinnedRun, name: String, value: Any): Boolean {
         val request = SignalWorkflowExecutionRequest.newBuilder()
             .setNamespace(client.options.namespace)
             .setWorkflowExecution(WorkflowExecution.newBuilder().setWorkflowId(run.workflowId).setRunId(run.runId))
-            .setSignalName(EVIDENCE_SIGNAL)
+            .setSignalName(name)
             .setIdentity(client.options.identity)
             .setRequestId(UUID.randomUUID().toString())
-        client.options.dataConverter.toPayloads(signal).ifPresent { request.setInput(it) }
+        client.options.dataConverter.toPayloads(value).ifPresent { request.setInput(it) }
         return try {
             client.workflowServiceStubs.blockingStub().signalWorkflowExecution(request.build())
             true
@@ -109,6 +135,9 @@ class TemporalEpisodeSignals(private val client: WorkflowClient) : EpisodeSignal
     private companion object {
         /** [EpisodeWorkflow.evidence]'s signal name (`@SignalMethod` without a name: the method's). */
         const val EVIDENCE_SIGNAL = "evidence"
+
+        /** [EpisodeWorkflow.symptom]'s signal name. */
+        const val SYMPTOM_SIGNAL = "symptom"
 
         /**
          * NOT_FOUND about the workflow or run — not about the namespace: Temporal reports a missing namespace as NOT_FOUND

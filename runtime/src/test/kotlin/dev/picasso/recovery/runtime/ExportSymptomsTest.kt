@@ -42,8 +42,45 @@ class ExportSymptomsTest {
         val r = assertIs<BundleRead.Ready>(ExportSymptoms.read(dir))
         assertEquals(9, r.lines.getValue(ExportKind.INCIDENT.file.name).size)
         assertEquals(4, r.lines.getValue(ExportKind.SEARCH.file.name).size)
-        Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"8\""))
+        Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"9\""))
         assertIs<BundleRead.Broken>(ExportSymptoms.read(dir))
+        // schema 8 without its fields: a run-1 line of schema 5 under "8" is a changed format
+        Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"8\""))
+        val eight = assertIs<BundleRead.Broken>(ExportSymptoms.read(dir))
+        assertTrue("manifest.instanceId" in eight.why && "openingKind" in eight.why, eight.why)
+    }
+
+    private fun sample(path: String): Path = Path.of(checkNotNull(javaClass.getResource("/picasso/$path/manifest.json")).toURI()).parent
+
+    @Test fun `the committed schema 8 samples read as picasso wrote them - digests and event ids unchanged in shape`() {
+        val one = assertIs<BundleRead.Ready>(ExportSymptoms.read(sample("schema-8/run-1")))
+        assertEquals(10, one.lines.getValue(ExportKind.INCIDENT.file.name).size)
+        assertEquals(4, one.lines.getValue(ExportKind.SEARCH.file.name).size)
+        val incident = one.lines.getValue(ExportKind.INCIDENT.file.name).first()
+        assertEquals("incident:${one.runId}:${incident.node.path("digest").textValue()}", ExportSymptoms.symptom(ExportKind.INCIDENT, one, incident, 0)!!.eventId)
+        assertIs<BundleRead.Ready>(ExportSymptoms.read(sample("schema-8/run-2")))
+        val before = assertIs<BundleRead.Ready>(ExportSymptoms.read(sample("schema-8/run-5a")))
+        assertEquals(listOf("SOURCE_UNOBSERVED", "DESTINATION_OCCUPIED", "DESTINATION_UNOBSERVED"),
+            before.lines.getValue(ExportKind.SEARCH.file.name).map { it.node.path("outcome").textValue() })
+        val after = assertIs<BundleRead.Ready>(ExportSymptoms.read(sample("schema-8/run-5b")))
+        assertEquals(emptyList(), after.lines.getValue(ExportKind.SEARCH.file.name))
+        val reopened = after.lines.getValue(ExportKind.INCIDENT.file.name).single()
+        assertEquals("REOPENED", reopened.node.path("openingKind").textValue())
+        assertEquals(before.lines.getValue(ExportKind.INCIDENT.file.name).single().node.path("incidentKey"), reopened.node.path("incidentKey"))
+    }
+
+    @Test fun `a schema 8 line out of shape makes the bundle broken`(@TempDir dir: Path) {
+        Files.list(sample("schema-8/run-5a")).use { files -> files.forEach { Files.copy(it, dir.resolve(it.fileName)) } }
+        val incidents = dir.resolve("incidents.jsonl")
+        val good = Files.readString(incidents)
+        Files.writeString(incidents, good.replace("\"openingKind\":\"NEW\"", "\"openingKind\":\"FRESH\""))
+        assertTrue("openingKind" in assertIs<BundleRead.Broken>(ExportSymptoms.read(dir)).why)
+        Files.writeString(incidents, good.replace("\"stallWindow\":\"PT40S\"", "\"stallWindow\":null"))
+        assertTrue("null together" in assertIs<BundleRead.Broken>(ExportSymptoms.read(dir)).why)
+        Files.writeString(incidents, good)
+        val searches = dir.resolve("remedy-searches.jsonl")
+        Files.writeString(searches, Files.readString(searches).replace("\"outcome\":\"DESTINATION_UNOBSERVED\"", "\"outcome\":\"DESTINATION_UNOBSERVED\",\"steps\":[]"))
+        assertTrue("never an approvable remedy" in assertIs<BundleRead.Broken>(ExportSymptoms.read(dir)).why)
     }
 
     @Test fun `the committed schema 7 sample reads as ten incidents and four searches`() {

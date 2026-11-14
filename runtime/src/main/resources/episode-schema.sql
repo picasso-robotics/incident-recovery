@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS episode_watch_cursor (
 );
 
 -- What the watcher did not carry, or carried without merging (design §12): NOT_READY, BROKEN, STUCK, AMBIGUOUS,
--- UNROUTED, ROUTE_ENDED, SIGNAL_FAILED, POLICY_UNUSABLE. Read by people (no screen yet — out of scope, plan D-lite).
+-- UNROUTED, ROUTE_ENDED, SIGNAL_FAILED, POLICY_UNUSABLE, FOLDED, LINK_UNKNOWN. Read by people (no screen yet — out of scope, plan D-lite).
 CREATE TABLE IF NOT EXISTS episode_watch_log (
     id                  bigserial   PRIMARY KEY,
     source              text        NOT NULL,
@@ -67,3 +67,15 @@ CREATE TABLE IF NOT EXISTS episode_watch_log (
 CREATE INDEX IF NOT EXISTS episode_event_intent_order
     ON episode_event ((payload -> 'candidate' -> 'ref' ->> 'jobOrderId'))
     WHERE kind = 'DISPATCH_INTENT';
+
+-- Which episode an incident first went to, by picasso's opaque incidentKey (export schema 8, design §12 구현(판 8)): a
+-- later line with the same key — a hold a picasso restart reopened, or a refused remedy's hold — goes to that episode
+-- run while it is open, and opens no new episode once it has ended. Written by the watcher after the first line was
+-- delivered; the first writer wins (a line sent again finds the row there).
+CREATE TABLE IF NOT EXISTS episode_incident_key (
+    incident_key        text        PRIMARY KEY,
+    workflow_id         text        NOT NULL,
+    run_id              text        NOT NULL,
+    event_id            text        NOT NULL,
+    at                  timestamptz NOT NULL DEFAULT now()
+);

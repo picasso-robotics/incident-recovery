@@ -13,6 +13,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -266,4 +267,54 @@ class WatcherEndToEndTest {
         assertEquals(listOf(Triple("resp-1", "not linked to this attempt's execution", false)), events.evidence())
         assertEquals("AWAITING_EVIDENCE", ep.view().phase)
     }
+
+    // Export schema 8: picasso's restart scene (run-5a, then run-5b reopening the same hold under the same incidentKey).
+
+    private val sameHold = "by:robotId:hum-02:jobOrderId:SEQ-RESTART"
+    private val beforeRestart = "ep:run-2026-11-14T11:15:50.275989400Z-1:$sameHold"
+    private val afterRestart = "ep:run-2026-11-14T11:15:50.314496800Z-2:$sameHold"
+
+    /** run-5a's incident carried in by [w] (its searches left out): the episode [beforeRestart] is open. */
+    private fun heldBeforeRestart(e: TestWorkflowEnvironment, w: EpisodeWatcher): EpisodeWorkflow {
+        export.copy("schema-8/run-5a").searches.clear()
+        export.snapshot()
+        assertEquals(1, w.pollOnce().opened)
+        val ep = episode(beforeRestart)
+        ep.until(e) { it.phase != "OPENING" }
+        return ep
+    }
+
+    private fun afterRestart(w: EpisodeWatcher) {
+        export.copy("schema-8/run-5b").snapshot()
+        assertEquals(1, w.pollOnce().opened)
+    }
+
+    @Test fun `schema 8 - a hold reopened by a picasso restart joins its open episode, in another run`() {
+        val e = start(v1)
+        val w = watcher(v1)
+        val ep = heldBeforeRestart(e, w)
+        val instanceId = ep.view().instanceId
+        afterRestart(w)
+        eventually(describe = { "view ${ep.view()}" }) { ep.view().takeIf { it.symptoms == 2 } }
+        assertEquals(instanceId, ep.view().instanceId, "the same episode")
+        assertNull(TemporalEpisodeSignals(client).current(afterRestart), "no episode on the reopened line's own key")
+        assertEquals("RUNNING", strictJson.readTree(logs("FOLDED").single().detailJson).path("episode").asText())
+        assertEquals(emptyList(), logs("SIGNAL_FAILED"))
+    }
+
+    @Test fun `schema 8 - a hold reopened after its episode ended starts no recovery again`() {
+        val e = start(v1)
+        val w = watcher(v1)
+        val ep = heldBeforeRestart(e, w)
+        ep.takeover(TakeoverRequest("op-1"))
+        ep.close(CloseRequest("op-1", "checked on site"))
+        assertEquals("CLOSED", ep.result().phase)
+        afterRestart(w)
+        assertEquals("ENDED", strictJson.readTree(logs("FOLDED").single().detailJson).path("episode").asText())
+        val signals = TemporalEpisodeSignals(client)
+        assertNull(signals.current(beforeRestart), "no new run on the first episode's id")
+        assertNull(signals.current(afterRestart), "no episode on the reopened line's own key")
+        assertEquals(0, w.pollOnce().opened)
+    }
+
 }

@@ -201,4 +201,16 @@ class CandidatesTest {
         assertEquals(listOf("ESCALATE"), projectCandidates(s, emptyList()).map { it.candidateId })
         assertEquals(listOf("ESCALATE"), diagnosisRequest("ep:t", 1, s).candidates.map { it.candidateId })
     }
+
+    @Test fun `schema 8's three place outcomes are never an approvable remedy - only a person checks or clears the place`() {
+        val searches = PicassoRestartBefore.snapshot(searchIds = listOf("search-1", "search-2", "search-3"))
+        assertEquals(listOf("ESCALATE"), ids(searches, emptyList()))
+        // with the incidents of the scene: the reopened hold offers the operator's decisions, the searches still nothing
+        val scene = Snapshot.parse(
+            PicassoRestartAfter.manifest, listOf(PicassoRestartAfter.incident("incident-1")),
+            listOf("search-1", "search-2", "search-3").map(PicassoRestartBefore::search),
+        )
+        assertTrue(ids(scene, emptyList()).none { it.startsWith("APPROVE_REMEDY") || it.startsWith("CHOOSE_SOURCE") }, "${ids(scene, emptyList())}")
+    }
+
 }

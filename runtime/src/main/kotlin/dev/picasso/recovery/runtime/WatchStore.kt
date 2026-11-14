@@ -7,11 +7,15 @@ import java.time.Instant
 /** Where the watcher is in one (source, run): [position] lines carried, the last one named [lastId]. */
 data class WatchCursor(val position: Int, val lastId: String)
 
+/** The episode run that the first line carrying one picasso `incidentKey` was delivered to, and that line's eventId. */
+data class IncidentEpisode(val workflowId: String, val runId: String, val eventId: String)
+
 /** One row of the watch log. */
 data class WatchLogRow(val id: Long, val source: String, val kind: String, val detailJson: String, val at: Instant)
 
 /**
- * The watcher's tables (design §12): its cursor, its log, and the one read it makes of the episode records.
+ * The watcher's tables (design §12): its cursor, its log, which episode run an incidentKey first went to (export schema 8),
+ * and the one read it makes of the episode records.
  * `open` for tests: they subclass it (to make [log] fail, for one).
  */
 open class WatchStore(private val connect: () -> Connection) {
@@ -90,6 +94,28 @@ open class WatchStore(private val connect: () -> Connection) {
                 }.toList()
             }
         }
+    }
+
+    /** The episode run the first line with picasso's [incidentKey] went to; null while no line with that key was carried. */
+    fun incidentEpisode(incidentKey: String): IncidentEpisode? = connect().use { c ->
+        c.prepareStatement("SELECT workflow_id, run_id, event_id FROM episode_incident_key WHERE incident_key = ?").use { s ->
+            s.setString(1, incidentKey)
+            s.executeQuery().use { rs -> if (rs.next()) IncidentEpisode(rs.getString(1), rs.getString(2), rs.getString(3)) else null }
+        }
+    }
+
+    /**
+     * Notes that the line [eventId] carrying [incidentKey] went to [runId] of [workflowId]. The first writer wins: the
+     * same key again (a line sent again after a failed cursor move) leaves the row as it is. Returns the row that holds.
+     */
+    open fun keepIncidentEpisode(incidentKey: String, workflowId: String, runId: String, eventId: String): IncidentEpisode = connect().use { c ->
+        c.prepareStatement(
+            "INSERT INTO episode_incident_key (incident_key, workflow_id, run_id, event_id) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
+        ).use { s ->
+            s.setString(1, incidentKey); s.setString(2, workflowId); s.setString(3, runId); s.setString(4, eventId)
+            s.executeUpdate()
+        }
+        checkNotNull(incidentEpisode(incidentKey)) { "incident key $incidentKey vanished" }
     }
 
     /**

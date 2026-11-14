@@ -41,7 +41,7 @@ picasso 번들은 조치 탐색 기록과 인시던트 줄을 담아 picasso가 
   <img alt="번들에서 에피소드로 이어지는 두 경로. picasso가 쓰는 run-1/ 번들에는 manifest.json, remedy-searches.jsonl, incidents.jsonl이 있으며, manifest에는 runId와 incidents 9줄·remedySearches 4줄의 counts가 있다. 조치 탐색 기록 search-1은 로봇 hum-02, 작업 지시 PATROL-1, 결과 FOUND이고, incident-1도 같은 로봇과 작업 지시의 인시던트다. 위쪽 경로에서 :host:cli open --search search-1은 search-1만 전달하여 ep:recovery-demo-1을 연다. 아래쪽 경로에서 감시기 :host:watcher는 robotId + jobOrderId가 일치하는 search-1과 incident-1을 상관하여 하나의 에피소드를 연다. 번들 밖의 job-responses.jsonl은 나중에 도착하며 점선 화살표로 감시기에게 전달된다. 실선은 증상 전달, 점선은 나중에 도착하는 작업 응답, 왼쪽 영역은 번들의 세 파일을 나타낸다. manifest 원문은 에피소드와 진단 요청에 포함되고, 해석하지 않는 필드도 원문으로 보존되어 증상 목록에 표시된다." src="docs/diagrams/bundle.svg">
 </picture>
 
-커밋된 샘플은 `runtime/src/test/resources/picasso/schema-6/run-1/`에 있습니다. incident-recovery는 LedgerExport 스키마 버전 `"5"`, `"6"`, `"7"`을 읽고, `counts`에 지정된 줄 수만큼 각 파일의 앞부분을 읽으며, 그 밖의 스키마 버전은 거부합니다(감시기는 번들을 손상된 것으로 기록하고 CLI는 오류로 중단합니다). 진단 스냅샷과 narrator도 스키마 버전 `"5"`와 `"6"`을 모두 받으므로, 스키마 버전 `"6"` 번들에서 열린 에피소드는 스키마 버전 `"5"` 에피소드와 같은 방식으로 진단됩니다. 아래 JSON은 샘플에서 읽는 필드만 남긴 예입니다.
+커밋된 샘플은 `runtime/src/test/resources/picasso/schema-6/run-1/`에 있습니다. incident-recovery는 LedgerExport 스키마 버전 `"5"`, `"6"`, `"7"`, `"8"`을 읽고, `counts`에 지정된 줄 수만큼 각 파일의 앞부분을 읽으며, 그 밖의 스키마 버전은 거부합니다(감시기는 번들을 손상된 것으로 기록하고 CLI는 오류로 중단합니다). 스키마 버전 `"8"`에서 감시기는 동일한 `incidentKey`를 가진 인시던트 줄을 하나의 인시던트로 취급합니다 — picasso 재기동으로 다시 열린 보류는 열려 있는 에피소드에 합류하고 해당 에피소드가 종료된 뒤에는 새 에피소드를 열지 않으며, 키가 없는 다시 연 줄은 자체 에피소드로 열려 감시 기록에 연결 불명(`LINK_UNKNOWN`)으로 기록됩니다. 진단 스냅샷과 narrator도 스키마 버전 `"5"`와 `"6"`을 모두 받으므로, 스키마 버전 `"6"` 번들에서 열린 에피소드는 스키마 버전 `"5"` 에피소드와 같은 방식으로 진단됩니다. 아래 JSON은 샘플에서 읽는 필드만 남긴 예입니다.
 
 `remedy-searches.jsonl`의 첫 줄:
 

@@ -16,24 +16,30 @@ enum class ExportKind(val file: BundleFile) {
 object ExportSymptoms {
     /**
      * picasso `LedgerExport.SCHEMA_VERSION`s this reader knows: "5" (picasso `8ab5400`), "6" (picasso `8f0cc04`, same
-     * incident-line fields; a SIGNAL route and a new digest shape, neither of which this reader interprets) and "7"
-     * (picasso `fde49d1`, same fields; two more `resolution.decision` values, checked by [read]). The same list as the
-     * diagnosis snapshot's ([Snapshot.SCHEMA_VERSIONS]).
+     * incident-line fields; a SIGNAL route and a new digest shape, neither of which this reader interprets), "7"
+     * (picasso `fde49d1`, same fields; two more `resolution.decision` values) and "8" (picasso fd31c6f, §15.322: incident
+     * identity, `decidedBy`, mission version and site settings, three more search outcomes, the manifest's `instanceId`;
+     * same digests). The same list as the diagnosis snapshot's ([Snapshot.SCHEMA_VERSIONS]).
      */
     val SCHEMA_VERSIONS = Snapshot.SCHEMA_VERSIONS
 
     /**
-     * Incidents first, then searches: the order picasso writes them, and the order the watcher sends them. A bundle whose
-     * incident line carries a `resolution.decision` its schema cannot carry ([Snapshot.DECISIONS]) is broken: the
-     * format changed under a known version, and no episode could diagnose that line anyway.
+     * Incidents first, then searches: the order picasso writes them, and the order the watcher sends them. A bundle the
+     * snapshot's per-version checks refuse ([Snapshot.formatProblems]: a `resolution.decision` its schema cannot carry,
+     * a schema 8 field missing or of the wrong shape) is broken: the format changed under a known version, and no
+     * episode could diagnose that line anyway.
      */
     fun read(dir: Path): BundleRead {
         val read = Bundles.read(dir, "runId", SCHEMA_VERSIONS, ExportKind.entries.map { it.file })
         if (read !is BundleRead.Ready) return read
-        val schema = strictJson.readTree(read.manifestJson).path("schemaVersion").textValue()
-        val strange = Snapshot.unknownDecisions(schema, read.lines[ExportKind.INCIDENT.file.name].orEmpty().map { it.node })
-        return if (strange.isEmpty()) read
-        else BundleRead.Broken("${ExportKind.INCIDENT.file.name} in $dir: schema $schema carries resolution.decision ${Snapshot.DECISIONS[schema]}, was $strange")
+        val manifest = strictJson.readTree(read.manifestJson)
+        val schema = manifest.path("schemaVersion").textValue()
+        val problems = Snapshot.formatProblems(
+            schema, manifest,
+            read.lines[ExportKind.INCIDENT.file.name].orEmpty().map { it.node },
+            read.lines[ExportKind.SEARCH.file.name].orEmpty().map { it.node },
+        )
+        return if (problems.isEmpty()) read else BundleRead.Broken("$dir: schema $schema: ${problems.joinToString("; ")}")
     }
 
     /** `search:<runId>:<searchId>`, `incident:<runId>:<digest>`. Null for an incident without a digest: never guessed. */

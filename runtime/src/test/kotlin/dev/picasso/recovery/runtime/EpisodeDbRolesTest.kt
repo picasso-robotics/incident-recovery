@@ -38,12 +38,13 @@ class EpisodeDbRolesTest {
         asRuntime("INSERT INTO episode_dispatch (idempotency_key, episode_instance_id, outcome_kind, answer) VALUES ('k', 'i/r', 'ANSWER', 'a')")
         asRuntime("INSERT INTO episode_watch_cursor (source, run_id, position, last_id) VALUES ('s', 'r', 1, 'x')")
         asRuntime("INSERT INTO episode_watch_log (source, kind, detail) VALUES ('s', 'BROKEN', '{}')")
+        asRuntime("INSERT INTO episode_incident_key (incident_key, workflow_id, run_id, event_id) VALUES ('k', 'ep:x', 'r', 'e')")
         asRuntime("SELECT count(*) FROM episode_event")
     }
 
     @Test fun `the runtime role can neither change nor remove a row, nor empty a table`() {
         asRuntime("INSERT INTO episode_event (episode_instance_id, seq, kind, payload) VALUES ('i/r', 1, 'OPENED', '{}')")
-        for (table in listOf("episode_event", "episode_notice", "episode_dispatch", "episode_watch_cursor", "episode_watch_log")) {
+        for (table in listOf("episode_event", "episode_notice", "episode_dispatch", "episode_watch_cursor", "episode_watch_log", "episode_incident_key")) {
             for (sql in listOf("UPDATE $table SET at = now()", "DELETE FROM $table", "TRUNCATE $table")) {
                 val e = assertFailsWith<SQLException>(sql) { asRuntime(sql) }
                 assertEquals("42501", e.sqlState, "$sql: ${e.message}")   // insufficient_privilege
@@ -78,6 +79,9 @@ class EpisodeDbRolesTest {
         watch.log("s", "BROKEN", """{"line":"\u0000"}""")   // jsonb refuses NUL: the fallback row
         assertEquals(listOf("""{"unstorable": true}""", """{"line": "x"}"""), watch.logs(10).map { it.detailJson })
         assertEquals(listOf("wf/r"), watch.instancesForOrder("JO-1"))
+        assertNull(watch.incidentEpisode("mw-1/incident-1"))
+        assertEquals(IncidentEpisode("ep:a", "r1", "incident:x:d"), watch.keepIncidentEpisode("mw-1/incident-1", "ep:a", "r1", "incident:x:d"))
+        assertEquals(IncidentEpisode("ep:a", "r1", "incident:x:d"), watch.keepIncidentEpisode("mw-1/incident-1", "ep:b", "r2", "incident:y:d"), "the first writer wins")
     }
 
     @Test fun `the worker's schema step, as the runtime role, checks the owner's schema instead of applying it`() {
@@ -145,9 +149,9 @@ class EpisodeDbRolesTest {
         assertEquals(EpisodeStore.SCHEMA_OBJECTS.size, EpisodeStore.SCHEMA_OBJECTS.toSet().size, "no name twice")
     }
 
-    @Test fun `the roles script grants on exactly the schema's five tables`() {
+    @Test fun `the roles script grants on exactly the schema's six tables`() {
         val tables = Regex("""^CREATE TABLE IF NOT EXISTS (\w+)""", RegexOption.MULTILINE).findAll(schemaSql).map { it.groupValues[1] }.toSet()
-        assertEquals(5, tables.size)
+        assertEquals(6, tables.size)
         for (statement in listOf("""REVOKE ALL ON (?!SEQUENCE)([\w, ]+) FROM incident_recovery_rt""", """GRANT SELECT, INSERT ON ([\w, ]+) TO incident_recovery_rt""")) {
             val named = checkNotNull(Regex(statement).find(script)) { "the roles script has no $statement" }.groupValues[1]
             assertEquals(tables, named.split(",").map { it.trim() }.toSet(), statement)
