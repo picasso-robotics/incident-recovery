@@ -291,6 +291,7 @@ DIAGNOSING 대신 ESCALATED(`ATTEMPTS_EXHAUSTED`)로 간다.
 | (시작) | `Detected` | CORRELATING | |
 | CORRELATING | 병합 창 만료 | DIAGNOSING | 스냅샷 크기 초과면 ESCALATED(`SNAPSHOT_TOO_LARGE`), ESCALATE 밖 후보가 계약 상한(26)을 넘으면 진단을 부르지 않고 ESCALATED(`CANDIDATES_TOO_MANY`). **DIAGNOSING 에 들어갈 때마다** 검사한다 — 합류 증상으로 커질 수 있다 |
 | (DIAGNOSING 에 들어갈 때) | 스냅샷에 `WITHHELD` 탐색 줄이 있음 | ESCALATED | `WITHHELD_HUMAN_FIRST`. **`diagnose` 를 부르지 않고 곧바로.** 안쪽 루프의 진단이 없으므로 쿼리(§7.3)나 카드로 샐 것이 없다. 카드는 사실과 `ESCALATE` 과업만 (§9.5). §19 D 가 정해질 때까지. 들어가는 모든 경로(CORRELATING · 재진단)에서 크기·후보 수 검사와 함께 본다 |
+| (DIAGNOSING 에 들어갈 때) | 버전 9 스냅샷의 모든 인시던트(열쇠별 최신 줄)가 `REWORK` 판단 | CLOSED | `reworkClosure`. **`diagnose` 를 부르지 않고 곧바로.** 에스컬레이션 사유나 알림 없이 `REWORKED: ...` 기록 세부 정보로 종료한다. 탐색 줄은 에피소드를 열어 두지 않으며, 동일 단위의 다음 시도(새 `incidentKey`)가 진단 전에 같은 에피소드에 들었으면 닫지 않는다. 닫는 시점은 DIAGNOSING 진입(병합 창 만료와 매 재진단)뿐이고, ESCALATED 와 진행 중인 발주·증빙 대기는 건드리지 않는다(§12 구현(버전 9)). |
 | DIAGNOSING | `RECOMMENDED` + 후보 안 + 판 일치 + `verified` 인용 하나 이상 | PROPOSED | |
 | DIAGNOSING | `RECOMMENDED` 인데 `unknowns` 있음 + 실행 계열 후보 | ESCALATED | `UNKNOWN_BLOCKS_EXECUTION` (투영 결함 신호, 알림) |
 | DIAGNOSING | `RECOMMENDED` + 후보 밖 / `OUT_OF_CANDIDATES` | ESCALATED | `OUT_OF_CANDIDATES`, `picked` 기록(`null` 이어도 받는다 — 권고 표지가 없던 답), 재진단 없음. 전이는 `picked` 에 기대지 않는다 |
@@ -576,7 +577,7 @@ Update 의 답(`Reply`, 거절도 값)이다. PROPOSED 는 순간 상태라 `Pha
     에피소드에 넣을 수 있다.
 - CLI 는 이제 감시자와 같은 `ExportSymptoms` · `Bundles` 로 읽는다(§12 구현(C1)). 그래서 CLI 가 보내는 줄은 감시자가 보낼 줄이고,
   `eventId` 도 같다.
-  - manifest 에 `schemaVersion "5"` · `"6"` · `"7"` · `"8"` 중 하나와 `counts` 가 있어야 한다. 그 버전의 대조(`Snapshot.formatProblems`)에 걸리는 줄 — 들 수 없는 `resolution.decision`, 모양이 틀린 버전 8 칸 — 이 있으면 열지 않는다(§12).
+  - manifest 에 `schemaVersion "5"` · `"6"` · `"7"` · `"8"` · `"9"` 중 하나와 `counts` 가 있어야 한다. 그 버전의 대조(`Snapshot.formatProblems`)에 걸리는 줄 — 들 수 없는 `resolution.decision`, 모양이 틀린 버전 8 · 9 칸 — 이 있으면 열지 않는다(§12).
   - CLI 는 `incidentKey` 로 접지 않는다(§12 구현(버전 8)). 키의 첫 에피소드를 적어 두는 곳이 없고, 에피소드는 사람이 `--key` 로 고른다.
   - `counts` 뒤의 줄은 읽지 않는다.
   - 두 jsonl 파일 어디든 깨진 줄이나 겹친 id 가 있으면 열지 않는다. 깨진 사건 줄은 `--search` 도 막는다.
@@ -881,9 +882,9 @@ catalog)** 에 선언한다. 항목: 사가 정의 `name@x.y.z`, 값의 출처(�
 ### 9.0 진단 스냅샷의 모양
 
 - `snapshot.manifest` 는 picasso 가 쓴 `manifest.json` 의 칸을 **전부 그대로** 싣는다(`schemaVersion` · `runId` · `writtenAt` ·
-  `virtualNow` · `contractSemver` · `counts`). 형도 바꾸지 않는다 — 예: `schemaVersion` 은 글자 `"5"` · `"6"` · `"7"` · `"8"` 중 하나다(`"7"` 은 narrator `e030b80`(main `17265db`)부터, `"8"` 은 narrator 브랜치 `chore/picasso-export-8` 이 main 에 들어간 뒤부터). narrator 는 아는 버전만 읽고
+  `virtualNow` · `contractSemver` · `counts`). 형도 바꾸지 않는다 — 예: `schemaVersion` 은 글자 `"5"` · `"6"` · `"7"` · `"8"` · `"9"` 중 하나다(`"7"` 은 narrator `e030b80`(main `17265db`)부터, `"8"` 은 narrator 브랜치 `chore/picasso-export-8` 이 main 에 들어간 뒤부터, `"9"` 는 narrator 의 버전 9 반입이 main 에 들어간 뒤부터). narrator 는 아는 버전만 읽고
   다른 버전이면 비재시도 예외로 멈춘다(§8.1 의 "계약 판 불일치" 와 같은 갈래 → `DIAGNOSIS_FAILED`).
-  인시던트 줄 `resolution.decision` 도 버전마다 아는 값만 받는다(`"5"` · `"6"` 은 `REWORK` · `CONFIRM_DONE`, `"7"` · `"8"` 은 여기에 `OPERATOR_CANCEL` · `REMEDY_APPLIED`). 버전 8 의 칸 대조는 §12 구현(버전 8)이다.
+  인시던트 줄 `resolution.decision` 도 버전마다 아는 값만 받는다(`"5"` · `"6"` 은 `REWORK` · `CONFIRM_DONE`, `"7"` · `"8"` · `"9"` 는 여기에 `OPERATOR_CANCEL` · `REMEDY_APPLIED`). 버전 8 의 칸 대조는 §12 구현(버전 8), 버전 9 의 `reworkBasis` 대조는 §12 구현(버전 9)이다.
   스냅숏도 같은 표(`Snapshot.DECISIONS`)로 막는다. `REMEDY_APPLIED` 는 「회복 완료」가 아니다 — 사람이 회복 제안을 승인해 조치가 그 단위 앞에 끼었다는 것뿐이고, 결과는 뒤의 인시던트 · 작업 응답이 말한다.
   판단이 실린 인시던트 줄(네 값 모두)은 운영자 판단 후보를 내지 않는다(§9.1).
 - `snapshot.incidents` · `snapshot.searches` 는 **에피소드를 연 줄을 각 목록의 첫째**에 둔다. narrator 는 v1 에서 incidents 의 첫째를
@@ -1244,7 +1245,7 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
 
 *읽기 (`Bundles`).* 내보내기만 이 읽개를 쓴다. 결과 통보는 `ResultExportFile`(아래 구현(C2)). picasso `BundleWriter` 의 규율(jsonl 먼저, `manifest.json` 마지막, 각각 이름 바꾸기)을 전제한다.
 - manifest 가 없으면 아직이다(`NotReady`, 다음 폴링에 다시). manifest 는 1 MiB, 줄 파일은 64 MiB 까지만 읽는다. 넘으면 깨짐(`Broken`)이다.
-- manifest 의 `schemaVersion` 이 아는 버전이어야 한다(내보내기 manifest `"5"` · `"6"` · `"7"` · `"8"`. 결과 통보는 manifest 가 없고 줄마다 버전 `"1"` 을 든다 — 아래 구현(C2)). run 칸(`runId`)과
+- manifest 의 `schemaVersion` 이 아는 버전이어야 한다(내보내기 manifest `"5"` · `"6"` · `"7"` · `"8"` · `"9"`. 결과 통보는 manifest 가 없고 줄마다 버전 `"1"` 을 든다 — 아래 구현(C2)). run 칸(`runId`)과
   `counts` 가 있어야 한다.
 - 내보내기(`ExportSymptoms`)는 다 읽은 뒤 인시던트 줄의 `resolution.decision` 을 그 버전이 들 수 있는 값(`Snapshot.DECISIONS`, §9.0)과 대조한다.
   모르는 값이 하나라도 있으면 깨짐이다 — 아는 버전을 밝히고 모르는 값을 실은 줄은 형식이 바뀐 것이고, 그 줄로는 진단 스냅숏도 서지 않는다.
@@ -1399,6 +1400,20 @@ narrator 의 "상태 없음, 부작용 없음" 계약을 지키려고 감시자�
 - 반영 순서: narrator의 버전 8 읽기(narrator 브랜치 `chore/picasso-export-8`)가 먼저 병합되어야 한다. 그전까지는 버전 8 에피소드 진단이 규약 불일치로 실패하고 사람에게 간다(`DIAGNOSIS_FAILED`).
 - 데이터베이스: 이번 변경 전에 설치된 데이터베이스는 소유자 계정으로 `episode-schema.sql`을 적용한 뒤 `scripts/db-roles.sql`을 다시 실행해야 한다(런타임 역할에 `episode_incident_key`의 SELECT, INSERT 권한 부여). 그렇지 않으면 런타임 역할의 시작 점검이 "apply episode-schema.sql as the owner first"와 함께 멈춘다.
 - 커밋된 샘플: `runtime/src/test/resources/picasso/schema-8/`에 picasso의 `run-1`, `run-2`, `run-5a`, `run-5b` 바이트 복사본이 들어 있다(`run-5a`·`run-5b`는 재기동 장면이며 `NEW` 인시던트 1건과 새 결과의 탐색 3건 뒤 동일 보류가 같은 `incidentKey`로 `REOPENED`됨). `core/src/test/resources/picasso/schema-8/`에는 `run-5a`·`run-5b`가 들어 있다.
+
+**구현(버전 9, 2026-11-15).**
+- `incident-recovery`는 picasso `LedgerExport` 내보내기 스키마 버전 `"9"`(picasso PR #33, 커밋 `f1dfd94`, picasso §15.323 "operator rework generalized")를 읽는다. 이제 읽는 버전은 `"5"`, `"6"`, `"7"`, `"8"`, `"9"`이며, 이전 버전들도 기존과 동일하게 계속 읽는다.
+- 버전 9는 버전 8의 모든 필드를 유지하고 인시던트 줄에 `resolution.reworkBasis` 필드를 추가한다. 해당 키는 주어진 모든 `resolution`에 존재하며, 값은 null이거나 내부 키가 모두 포함된 `{robotId, hold, source, destination, readAt}`(null 값 유지)이다. `hold`는 null 또는 `{kind, objectRef}`이고, `source`와 `destination`은 null 또는 `{slotId, occupied, identity, observedAt}`이며, `occupied`는 불리언 또는 null이다. null이 아닌 값은 `REWORK` 결정에만 올 수 있다. `digest`는 변경되지 않으므로(해시 외부에 `resolution` 존재) 이벤트 식별자 형태가 유지되고 동일 시드의 다이제스트는 버전 8과 같다.
+- 형태 검사는 `Snapshot.formatProblems`에서 버전 8의 모든 검사 항목(`Snapshot.FROM_8`)에 더해 `reworkBasis` 형태 검사를 수행한다. 위반 시 버전 8과 마찬가지로 진단 스냅숏은 실패(`DIAGNOSIS_FAILED`)로 이관되고 내보내기 리더는 번들을 `BROKEN`으로 처리한다. `incidentLink`(버전 8의 `incidentKey` 접기) 역시 버전 9에 그대로 적용된다.
+- 버전 9의 새로운 값 조합으로 시도 실패 인시던트(`unresolved: false`)가 `resolution.decision = REWORK`를 가질 수 있다(이전에는 건너뛴 쌍의 이동 인시던트만 가능했다). 이는 사람이 해당 단위를 다시 내기로 결정했음을 뜻한다.
+- 재작업에 의한 종료(`reworkClosure`): 에피소드가 `DIAGNOSING`에 진입할 때마다(병합 창 이후 및 매 재진단 시) 내보내기 스키마가 `"9"`이고 에피소드에 인시던트 줄이 하나 이상 있으며 모든 인시던트(`incidentKey`로 그룹화, 키가 없는 줄은 독립 인시던트)의 최신 줄이 `resolution.decision = REWORK`이면 `diagnose`를 호출하지 않는다. 에피소드는 에스컬레이션 사유나 알림 없이(재작업한 사람이 이미 대응 중) 기록 세부 정보 `REWORKED: ...`와 함께 곧바로 `CLOSED`로 전이한다. 에피소드 내 탐색 줄은 에피소드를 열어 두지 않는다. 닫는 시점은 DIAGNOSING 진입(병합 창 만료와 매 재진단 — 전제 깨짐, `NOT_DONE`, 승인 거절·경과)뿐이고, ESCALATED 와 진행 중인 발주·증빙 대기는 건드리지 않는다.
+- 새 기록 종류인 `REWORKED`는 재작업된 각 인시던트(`incidentId`, `incidentKey`, `attempt`)와 그 근거를 나열한다(`reworkBasisOf`). 근거는 `NONE`(`reworkBasis`가 null인 경우; 보류 재작업 또는 동일 번들의 다른 단위), `NOT_OBSERVED`(`{robotId, readAt}`만 있는 경우; 검사, 이동, 건너뛴 쌍의 이동 등 확인도 미확인 재작업도 아닌 "관측 없음"), `OBSERVED`(`confirmed` 목록 포함)로 분류된다. `confirmed` 목록에는 관측값이 확인을 나타낼 때만 항목이 포함된다(`hold.kind = HOLD_KIND_EMPTY`인 `EMPTY_HAND`, `source`의 `occupied: true`인 `SOURCE_OCCUPIED`, `destination`의 `occupied: false`인 `DESTINATION_FREE`; 각 `slotId`, `identity`, `observedAt` 포함, 없으면 `readAt`이 시각이 됨). `occupied: null`은 확인으로 보지 않으며, 소스 `identity: null`은 null로 전달되어 무언가 존재함을 뜻할 뿐 자재 확인은 아니다.
+- 동일 단위의 다음 시도(더 큰 `attempt`를 가진 줄)는 새로운 인시던트이며, picasso가 새 `incidentKey`를 부여하므로 재작업된 인시던트로 접히지 않는다. 에피소드가 종료된 뒤 도착하면 새 에피소드를 열고(끝난 run 이 비우는 중이면 다른 새 인시던트처럼 이어 시작한다), 진단 전 같은 에피소드에 도착하면(동일 병합 창 또는 상관 규칙) 해당 에피소드는 닫히지 않고 계속 진행되며 재작업된 인시던트 자체에는 결정이 제시되지 않는다.
+- 재작업에 의한 이러한 종료는 오직 버전 9에만 적용된다. 버전 9 이전의 `REWORK`는 보류나 건너뛴 쌍에 대한 결정이었으며 기존 방식대로 읽히므로, 이미 커밋된 워크플로 이력은 변경 없이 그대로 재생(replay)된다.
+- `REWORK_RECHECK` 인시던트(버전 9): 재작업된 `pick_place` 시도가 첫 발행 직전 재검사에 실패했을 때 열린다(태스크 없음, `fault` null, `unresolved: false`, `openingKind: NEW`, `attempt`는 재작업 시도). 이는 로봇 결함이 아니며 사람이 내린 재작업이 손이나 자리 변경으로 인해 발행되지 못한 것이다. 복구는 사람이 다시 재작업하는 것이며, `projectCandidates`는 이에 대해 사람 결정을 제시하지 않고 picasso도 조치 탐색을 기록하지 않으므로 에피소드는 `ESCALATE` 단독으로 진단된다. 사람이 다시 재작업하면 해당 인시던트는 `REWORK`를 담아 동일하게 종료된다.
+- 버전 9의 `projectCandidates`는 사람이 이미 재작업한 시도의 조치 탐색 줄에서는 후보를 내지 않는다. 조치 탐색 줄에는 단위나 `attempt`가 없으므로 `robotId`, `jobOrderId`와 가상 시각(`at`)을 대조해 해당 탐색을 걸러낸다(`REWORK` 판단은 판단의 `at`, `REWORK_RECHECK` 인시던트는 인시던트의 `at` 이하인 탐색; 시각을 읽지 못하면 거른다). 이전 버전은 기존대로 후보를 내므로 커밋된 이력은 변경 없이 재생된다.
+- 커밋된 샘플은 `runtime/src/test/resources/picasso/schema-9/`에 picasso의 `run-1`, `run-2`, `run-3`, `run-5a`, `run-5b`(picasso `f1dfd94`) 바이트 복사본이 보관되어 있고, `core/src/test/resources/picasso/schema-9/`에는 `run-3`, `run-5a`, `run-5b`가 보관되어 있다. `run-3`에서 인시던트 1(`attempt` 0)은 `reworkBasis: null`인 `REWORK`를 전달하고 새 키를 가진 동일 단위의 다음 시도인 인시던트 2는 `CONFIRM_DONE`을 전달한다. 샘플 중 시도 실패 재작업은 포함되지 않으며 테스트에서 직접 해당 줄을 구성한다. 버전 9를 위한 데이터베이스 변경(새 테이블)은 없다.
+- 반영 순서: narrator는 자체 반입이 병합된 뒤에만 버전 9를 읽으며, 그전까지 버전 9 에피소드의 진단은 계약 불일치로 실패하여 사람에게 이관(`DIAGNOSIS_FAILED`)된다(재작업으로 종료되는 에피소드는 진단을 호출하지 않으므로 영향 없음). 한편 picasso가 거부한 재작업(`Refused`)은 실행 추적에만 남을 뿐 내보내기에 포함되지 않는다.
 
 ---
 

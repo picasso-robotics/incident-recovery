@@ -52,6 +52,18 @@ internal fun restartSignal(run: String, eventId: String): SymptomSignal {
     return SymptomSignal(eventId, "INCIDENT", text, 0)
 }
 
+/** A committed schema 9 bundle's manifest (`/picasso/schema-9/<run>/`). */
+internal fun schema9Manifest(run: String): String =
+    requireNotNull(Picasso::class.java.getResource("/picasso/schema-9/$run/manifest.json")) { "missing $run" }.readText(Charsets.UTF_8)
+
+/** One incident line of a committed schema 9 bundle, as the symptom [eventId]. */
+internal fun schema9Signal(run: String, incidentId: String, eventId: String): SymptomSignal {
+    val text = requireNotNull(Picasso::class.java.getResource("/picasso/schema-9/$run/incidents.jsonl")) { "missing $run" }
+        .readText(Charsets.UTF_8).lines().filter { it.isNotBlank() }
+        .single { ObjectMapper().readTree(it).path("incidentId").asText() == incidentId }
+    return SymptomSignal(eventId, "INCIDENT", text, 0)
+}
+
 /** signalWithStart, as the watcher will (design §7.1). */
 internal fun WorkflowClient.openEpisode(
     id: String = "ep:test",

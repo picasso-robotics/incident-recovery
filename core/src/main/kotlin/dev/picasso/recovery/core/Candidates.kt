@@ -1,8 +1,14 @@
 package dev.picasso.recovery.core
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
+import java.time.Instant
+import java.time.format.DateTimeParseException
 
 enum class CandidateKind { APPROVE_REMEDY, CHOOSE_SOURCE, OPERATOR_DECISION, ESCALATE }
+
+/** picasso's failure class of a rework not issued because its first-issue recheck failed (export schema 9, §15.323). */
+const val REWORK_RECHECK = "REWORK_RECHECK"
 
 /** What an operator may decide about an unresolved unit. The enum NAME is the wire value (id material and `ref.decision`). */
 enum class OperatorDecision { CONFIRM_DONE, REWORK }
@@ -108,10 +114,12 @@ fun projectCandidates(snapshot: Snapshot, unknowns: List<Unknown>): List<Candida
     fun add(c: Candidate) { if (c.wellFormed()) byId.putIfAbsent(c.candidateId, c) }
 
     add(Candidate.ESCALATE)
+    val reworked = reworkedAttempts(snapshot)
     for (s in snapshot.searches) {
         val searchId = requireNotNull(s.text("searchId"))
         val robotId = s.text("robotId")
         val jobOrderId = s.text("jobOrderId")
+        if (reworked.any { it.covers(s) }) continue
         when (s.text("outcome")) {
             "FOUND" -> {
                 // Every step must name its skill: picasso approves only if its steps ⊆ sawSkillTypes, so a partial list
@@ -144,9 +152,51 @@ fun projectCandidates(snapshot: Snapshot, unknowns: List<Unknown>): List<Candida
         val matched = i.text("verification") == "MATCHED"
         val executionId = i.text("executionId")
         val unitId = i.text("unitId")
-        if (unresolved && undecided && matched && executionId != null && unitId != null)
+        // A REWORK_RECHECK incident (export schema 9, picasso §15.323) is no failure of the robot: a rework a person gave
+        // was not issued because the hand or a place had changed just before. Its recovery is a person reworking again
+        // at picasso — no decision is offered here, and picasso writes no remedy search for it. picasso marks it
+        // `unresolved: false`; the class is checked as well, so a line that says otherwise still offers nothing.
+        val recheck = i.text("failureClass") == REWORK_RECHECK
+        if (unresolved && undecided && matched && !recheck && executionId != null && unitId != null)
             OperatorDecision.entries.forEach { add(Candidate.operatorDecision(executionId, unitId, it)) }
     }
     val blocked = unknowns.isNotEmpty()
     return byId.values.filterNot { blocked && it.physicalAction }.sortedBy { it.candidateId }
+}
+
+/**
+ * An attempt a person already reworked (export schema 9): a `REWORK` decision on an incident, cut at the decision's `at`;
+ * or a REWORK_RECHECK incident — a rework not issued — cut at the incident's `at`. A remedy search line has no unit or
+ * attempt, only the robot and the order, so a search of that robot and order made at or before the cut (both picasso's
+ * virtual clock) is that attempt's search: it offers nothing (a person is reissuing the unit). A later search, of a later
+ * failure, is not covered. A time that cannot be read covers the search (fail-safe: fewer options).
+ */
+private class ReworkedAttempt(val robotId: String, val jobOrderId: String, val cut: Instant?) {
+    fun covers(search: JsonNode): Boolean {
+        if (search.text("robotId") != robotId || search.text("jobOrderId") != jobOrderId) return false
+        val at = instantOrNull(search.text("at"))
+        return cut == null || at == null || !at.isAfter(cut)
+    }
+}
+
+/** Only from export schema 9: before it a search was offered as it was, and committed histories replay unchanged. */
+private fun reworkedAttempts(snapshot: Snapshot): List<ReworkedAttempt> {
+    if (snapshot.manifest.text("schemaVersion") != "9") return emptyList()
+    return snapshot.incidents.mapNotNull { i ->
+        val robotId = i.text("robotId") ?: return@mapNotNull null
+        val jobOrderId = i.text("jobOrderId") ?: return@mapNotNull null
+        val resolution = i.get("resolution")
+        when {
+            resolution != null && resolution.isObject && resolution.text("decision") == "REWORK" ->
+                ReworkedAttempt(robotId, jobOrderId, instantOrNull(resolution.text("at")))
+            i.text("failureClass") == REWORK_RECHECK -> ReworkedAttempt(robotId, jobOrderId, instantOrNull(i.text("at")))
+            else -> null
+        }
+    }
+}
+
+private fun instantOrNull(text: String?): Instant? = try {
+    text?.let(Instant::parse)
+} catch (e: DateTimeParseException) {
+    null
 }

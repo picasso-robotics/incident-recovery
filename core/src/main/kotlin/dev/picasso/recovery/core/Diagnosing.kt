@@ -14,9 +14,15 @@ internal fun Out.onCorrelating(event: EpisodeEvent, policy: PolicyTable, now: In
 /**
  * Enters DIAGNOSING for the next attempt (design §5.2). On every entry — joined symptoms can change each of them — the
  * attempt count, a WITHHELD search line, the snapshot size and the number of offered candidates are checked; any
- * failing check escalates without calling `diagnose`.
+ * failing check escalates without calling `diagnose`. Before them all: an episode whose every incident a person reworked
+ * (export schema 9, [reworkClosure]) is not diagnosed but closed — a person is issuing those units again. This entry (the
+ * merge window's end and every re-diagnosis: a broken precondition, NOT_DONE, a rejected or lapsed approval) is the only
+ * place it closes; ESCALATED and a dispatch or evidence wait in progress are left as they are.
  */
 internal fun Out.enterDiagnosing(policy: PolicyTable, now: Instant) {
+    // A snapshot that cannot be built is not a closure: the checks below escalate it as before.
+    val reworked = try { reworkClosure(state.snapshot()) } catch (e: Exception) { null }
+    if (reworked != null) return closeByRework(reworked, now)
     val number = (state.history.maxOfOrNull { it.attempt } ?: 0) + 1
     if (number > policy.maxAttemptsPerEpisode)
         return escalate(now, Escalation(EscalationReason.ATTEMPTS_EXHAUSTED, "attempt $number > ${policy.maxAttemptsPerEpisode}"))
@@ -187,6 +193,17 @@ internal fun Out.onAwaitingApproval(event: EpisodeEvent, policy: PolicyTable, no
         )
         else -> ignore(event, "awaiting approval")
     }
+}
+
+/**
+ * CLOSED "by a person's rework" (design §12 구현(버전 9)): no diagnosis, no notice — the person who reworked is already on
+ * it. The REWORKED record carries each incident and, as the closure's grounds, only what its `reworkBasis` observed.
+ * Reached only on entering DIAGNOSING (the merge window's end and every re-diagnosis); ESCALATED and a dispatch or
+ * evidence wait in progress are never touched.
+ */
+private fun Out.closeByRework(incidents: List<ReworkedIncident>, now: Instant) {
+    record(RecordKind.REWORKED) { putArray("incidents").apply { incidents.forEach { addObject().putReworked(it) } } }
+    enter(Phase.CLOSED, now, detail = "REWORKED: a person decided REWORK on every incident of the episode")
 }
 
 /** Closes the attempt as REDIAGNOSE and diagnoses again (design §5.1, §5.2). */

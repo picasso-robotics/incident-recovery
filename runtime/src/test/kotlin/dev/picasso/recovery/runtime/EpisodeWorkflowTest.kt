@@ -224,6 +224,22 @@ class EpisodeWorkflowTest {
         assertTrue(records(first).any { it.kind == "IGNORED" && "SymptomJoined" in it.payload }, "the ended episode recorded it: ${records(first)}")
     }
 
+    @Test fun `a schema 9 incident a person reworked closes its episode undiagnosed, and the next attempt opens its own`() {
+        // picasso's run-3: incident-1 (attempt 0) carries REWORK; incident-2 is the unit's next attempt, under a new key
+        val start = EpisodeStart(schema9Manifest("run-3"))
+        val ep = open(id = "ep:rework", symptom = schema9Signal("run-3", "incident-1", "incident:rw:1"), start = start)
+        assertEquals(EpisodeResult("CLOSED", null), ep.result())
+        val first = eventually { synchronized(acts.records) { acts.records.firstOrNull { it.kind == "OPENED" && "incident:rw:1" in it.payload } }?.instanceId }
+        val closed = settledRecords(first) { r -> r.any { it.kind == "TRANSITION" && "\"to\":\"CLOSED\"" in it.payload } }
+        assertTrue(closed.none { it.kind == "DIAGNOSIS_REQUESTED" }, "a reworked episode is not diagnosed: $closed")
+        assertTrue(closed.any { it.kind == "REWORKED" && "\"basis\":\"NONE\"" in it.payload }, "$closed")
+        // the next attempt is a new incident: a new episode under the same correlation key, never folded into the closed one
+        client.openEpisode("ep:rework", schema9Signal("run-3", "incident-2", "incident:rw:2"), start)
+        val next = client.newWorkflowStub(EpisodeWorkflow::class.java, "ep:rework").until { it.instanceId != first && it.phase != "OPENING" }
+        assertEquals(1, next.symptoms)
+        eventually { records(next.instanceId).firstOrNull { it.kind == "OPENED" && "incident:rw:2" in it.payload } }
+    }
+
     @Test fun `a null narrator answer is a failed diagnosis, not a lost event`() {
         narrator.answer = { null }
         val ep = open()

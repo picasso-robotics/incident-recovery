@@ -44,9 +44,15 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
          * incident line's `resolution.decision` ([DECISIONS]). "8" (picasso §15.322, the audit export bundle,
          * `feat/audit-export-bundle` fd31c6f) adds fields ([formatProblems]); narrator's reading of "8" is on its branch
          * `chore/picasso-export-8`, not on narrator main when this was written: until it is, a schema 8 episode's
-         * diagnosis fails as a contract mismatch and goes to a person (DIAGNOSIS_FAILED).
+         * diagnosis fails as a contract mismatch and goes to a person (DIAGNOSIS_FAILED). "9" (picasso §15.323, operator
+         * rework generalized, picasso PR #33 `f1dfd94`) keeps every field of "8" and adds `resolution.reworkBasis`
+         * ([formatProblems], [reworkBasisOf]); narrator reads "9" only once its own absorption lands — until then a schema 9
+         * episode's diagnosis fails the same way and goes to a person.
          */
-        val SCHEMA_VERSIONS = setOf("5", "6", "7", "8")
+        val SCHEMA_VERSIONS = setOf("5", "6", "7", "8", "9")
+
+        /** The schemas that carry the fields "8" added (incident identity, `decidedBy`, mission and site settings): "8" and later. */
+        val FROM_8 = setOf("8", "9")
 
         /**
          * The values an incident line's `resolution.decision` may carry in each export schema (picasso
@@ -62,6 +68,7 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
             "6" to setOf("REWORK", "CONFIRM_DONE"),
             "7" to setOf("REWORK", "CONFIRM_DONE", "OPERATOR_CANCEL", "REMEDY_APPLIED"),
             "8" to setOf("REWORK", "CONFIRM_DONE", "OPERATOR_CANCEL", "REMEDY_APPLIED"),
+            "9" to setOf("REWORK", "CONFIRM_DONE", "OPERATOR_CANCEL", "REMEDY_APPLIED"),
         )
 
         /**
@@ -87,7 +94,11 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
          *   null is a hold reopened from an older judgement record, whose link is unknown — so only on a REOPENED line),
          *   `resolution.decidedBy {id, kind}` whenever a resolution is given, and on `intent` `missionVersion` (an integer
          *   or null) and the site settings `siteSettingsVersion` · `inDoubtGrace` · `stallWindow`, null together or present
-         *   together (picasso's encoder asserts it).
+         *   together (picasso's encoder asserts it); the same in "9";
+         * - "9" (picasso `LedgerExport`, f1dfd94): every given resolution carries the key `reworkBasis` — null, or (only on a
+         *   REWORK decision) `{robotId, hold, source, destination, readAt}` with every key present: `hold` null or
+         *   `{kind, objectRef}`, `source` · `destination` null or `{slotId, occupied, identity, observedAt}` (`occupied` a
+         *   boolean or null, the others strings or null).
          * Only the shape is checked. `incidentKey` is opaque and never taken apart; `attempt` is not read beyond this.
          */
         fun formatProblems(version: String, manifest: JsonNode, incidents: List<JsonNode>, searches: List<JsonNode>): List<String> {
@@ -98,13 +109,41 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
                 val outcome = s.text("outcome") ?: continue
                 if (outcome !in PERSON_PLACE_OUTCOMES) continue
                 val id = s.get("searchId")
-                if (version != "8") problems += "search $id: outcome $outcome comes only from schema 8"
+                if (version !in FROM_8) problems += "search $id: outcome $outcome comes only from schema 8 on"
                 if (s.has("steps")) problems += "search $id: outcome $outcome carries steps, it is never an approvable remedy"
             }
-            if (version != "8") return problems
+            if (version !in FROM_8) return problems
             if (manifest.text("instanceId").isNullOrBlank()) problems += "manifest.instanceId must be a non-blank string"
             for (i in incidents) problems += incidentProblems8(i).map { "incident ${i.get("incidentId")}: $it" }
+            if (version == "9") for (i in incidents) problems += reworkBasisProblems(i).map { "incident ${i.get("incidentId")}: $it" }
             return problems
+        }
+
+        /** Schema "9"'s `resolution.reworkBasis` (picasso `LedgerExport.reworkBasis`): the key on every given resolution, null keys kept. */
+        private fun reworkBasisProblems(i: JsonNode): List<String> {
+            val resolution = i.get("resolution")
+            if (resolution == null || !resolution.isObject) return emptyList()
+            if (!resolution.has("reworkBasis")) return listOf("resolution.reworkBasis must be present (null or an object) when a resolution is given")
+            val b = resolution.get("reworkBasis")
+            if (b.isNull) return emptyList()
+            val p = mutableListOf<String>()
+            if (!b.isObject) return listOf("resolution.reworkBasis must be null or an object, was $b")
+            if (resolution.text("decision") != "REWORK") p += "resolution.reworkBasis is given only on a REWORK decision, was on ${resolution.get("decision")}"
+            fun text(n: JsonNode, key: String) = n.has(key) && n.get(key).isTextual && n.get(key).textValue().isNotBlank()
+            fun nullOrText(n: JsonNode, key: String) = n.has(key) && (n.get(key).isNull || n.get(key).isTextual)
+            if (!text(b, "robotId")) p += "resolution.reworkBasis.robotId must be a non-blank string, was ${b.get("robotId")}"
+            if (!text(b, "readAt")) p += "resolution.reworkBasis.readAt must be a non-blank string, was ${b.get("readAt")}"
+            val hold = b.get("hold")
+            if (hold == null || !(hold.isNull || (hold.isObject && text(hold, "kind") && nullOrText(hold, "objectRef"))))
+                p += "resolution.reworkBasis.hold must be null or {kind, objectRef}, was $hold"
+            for (key in listOf("source", "destination")) {
+                val slot = b.get(key)
+                val ok = slot != null && (slot.isNull || (slot.isObject && text(slot, "slotId") &&
+                    slot.has("occupied") && (slot.get("occupied").isNull || slot.get("occupied").isBoolean) &&
+                    nullOrText(slot, "identity") && nullOrText(slot, "observedAt")))
+                if (!ok) p += "resolution.reworkBasis.$key must be null or {slotId, occupied, identity, observedAt}, was $slot"
+            }
+            return p
         }
 
         private fun incidentProblems8(i: JsonNode): List<String> {
