@@ -35,3 +35,8 @@ val PicassoRestart9After = PicassoRun("schema-9/run-5b")
 
 /** run-3 under export schema 9: a hold reworked (incident-1, basis null), the unit's next attempt confirmed done (incident-2). */
 val PicassoRework = PicassoRun("schema-9/run-3")
+
+/** run-3 and the restart scene as picasso wrote them again under export schema 10 (§15.329): the same lines, an empty removal register. */
+val PicassoRework10 = PicassoRun("schema-10/run-3")
+val PicassoRestart10Before = PicassoRun("schema-10/run-5a")
+val PicassoRestart10After = PicassoRun("schema-10/run-5b")

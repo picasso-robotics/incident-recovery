@@ -47,12 +47,26 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
          * diagnosis fails as a contract mismatch and goes to a person (DIAGNOSIS_FAILED). "9" (picasso §15.323, operator
          * rework generalized, picasso PR #33 `f1dfd94`) keeps every field of "8" and adds `resolution.reworkBasis`
          * ([formatProblems], [reworkBasisOf]); narrator reads "9" only once its own absorption lands — until then a schema 9
-         * episode's diagnosis fails the same way and goes to a person.
+         * episode's diagnosis fails the same way and goes to a person. "10" (picasso §15.329, revision removals, picasso
+         * main `6c4143d`) keeps the incident and search lines of "9" byte for byte (same digests) and adds a third register,
+         * `revision-removals.jsonl`, with `counts.revisionRemovals` in the manifest ([FROM_10], [revisionRemovalProblems]);
+         * narrator reads "10" only once its own absorption lands — until then a schema 10 episode's diagnosis fails the
+         * same way and goes to a person.
          */
-        val SCHEMA_VERSIONS = setOf("5", "6", "7", "8", "9")
+        val SCHEMA_VERSIONS = setOf("5", "6", "7", "8", "9", "10")
 
         /** The schemas that carry the fields "8" added (incident identity, `decidedBy`, mission and site settings): "8" and later. */
-        val FROM_8 = setOf("8", "9")
+        val FROM_8 = setOf("8", "9", "10")
+
+        /** The schemas that carry "9"'s `resolution.reworkBasis` and take a rework of any attempted failure: "9" and later. */
+        val FROM_9 = setOf("9", "10")
+
+        /**
+         * The schemas whose bundle carries the revision-removal register (`revision-removals.jsonl`, counted by the
+         * manifest's `counts.revisionRemovals`): "10" and later. An older bundle has no such file — none was written, and
+         * none happened (an older picasso left a removed item's units in the execution and issued them).
+         */
+        val FROM_10 = setOf("10")
 
         /**
          * The values an incident line's `resolution.decision` may carry in each export schema (picasso
@@ -69,6 +83,7 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
             "7" to setOf("REWORK", "CONFIRM_DONE", "OPERATOR_CANCEL", "REMEDY_APPLIED"),
             "8" to setOf("REWORK", "CONFIRM_DONE", "OPERATOR_CANCEL", "REMEDY_APPLIED"),
             "9" to setOf("REWORK", "CONFIRM_DONE", "OPERATOR_CANCEL", "REMEDY_APPLIED"),
+            "10" to setOf("REWORK", "CONFIRM_DONE", "OPERATOR_CANCEL", "REMEDY_APPLIED"),
         )
 
         /**
@@ -94,11 +109,13 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
          *   null is a hold reopened from an older judgement record, whose link is unknown — so only on a REOPENED line),
          *   `resolution.decidedBy {id, kind}` whenever a resolution is given, and on `intent` `missionVersion` (an integer
          *   or null) and the site settings `siteSettingsVersion` · `inDoubtGrace` · `stallWindow`, null together or present
-         *   together (picasso's encoder asserts it); the same in "9";
+         *   together (picasso's encoder asserts it); the same in "9" and "10";
          * - "9" (picasso `LedgerExport`, f1dfd94): every given resolution carries the key `reworkBasis` — null, or (only on a
          *   REWORK decision) `{robotId, hold, source, destination, readAt}` with every key present: `hold` null or
          *   `{kind, objectRef}`, `source` · `destination` null or `{slotId, occupied, identity, observedAt}` (`occupied` a
-         *   boolean or null, the others strings or null).
+         *   boolean or null, the others strings or null); the same in "10";
+         * - "10" (picasso `LedgerExport`, 6c4143d): the manifest's `counts.revisionRemovals`, an integer >= 0. The register's
+         *   lines are not part of a snapshot (they are no symptom); the export reader checks them ([revisionRemovalProblems]).
          * Only the shape is checked. `incidentKey` is opaque and never taken apart; `attempt` is not read beyond this.
          */
         fun formatProblems(version: String, manifest: JsonNode, incidents: List<JsonNode>, searches: List<JsonNode>): List<String> {
@@ -115,7 +132,12 @@ class Snapshot(manifest: ObjectNode, incidents: List<ObjectNode>, searches: List
             if (version !in FROM_8) return problems
             if (manifest.text("instanceId").isNullOrBlank()) problems += "manifest.instanceId must be a non-blank string"
             for (i in incidents) problems += incidentProblems8(i).map { "incident ${i.get("incidentId")}: $it" }
-            if (version == "9") for (i in incidents) problems += reworkBasisProblems(i).map { "incident ${i.get("incidentId")}: $it" }
+            if (version in FROM_10) {
+                val n = manifest.get("counts")?.get("revisionRemovals")
+                if (n == null || !n.isIntegralNumber || !n.canConvertToInt() || n.intValue() < 0)
+                    problems += "manifest.counts.revisionRemovals must be an integer >= 0, was $n"
+            }
+            if (version in FROM_9) for (i in incidents) problems += reworkBasisProblems(i).map { "incident ${i.get("incidentId")}: $it" }
             return problems
         }
 

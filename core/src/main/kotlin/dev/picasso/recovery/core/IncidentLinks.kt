@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 
 /**
  * What an incident line says about the hold it is part of (export schema "8" and later, picasso §15.322; design §12
- * 구현(판 8)). Schema "9" carries the same fields.
+ * 구현(판 8)). Schemas "9" and "10" carry the same fields.
  * The episode-opening choice reads it: lines with the same `incidentKey` are one incident, in the episode that is
  * running and in one that has ended. `attempt` is never read here — it is recurrence material, not a link (picasso
  * hands out a new key when a reworked unit breaks again, and one attempt can open two incidents).

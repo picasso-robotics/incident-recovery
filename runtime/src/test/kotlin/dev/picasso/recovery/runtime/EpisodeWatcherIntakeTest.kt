@@ -1,5 +1,6 @@
 package dev.picasso.recovery.runtime
 
+import dev.picasso.recovery.core.Snapshot
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -44,13 +45,18 @@ internal class RecordingSignals : EpisodeSignals {
 internal class ExportDir(val dir: Path, var runId: String = "run-A") {
     val incidents = mutableListOf<String>()
     val searches = mutableListOf<String>()
-    /** The manifest's schemaVersion; "8" also writes an `instanceId`. */
+    /** Revision-removal lines; written, and counted, only from schema "10". */
+    val removals = mutableListOf<String>()
+    /** The manifest's schemaVersion; "8" and later also write an `instanceId`, "10" and later the removal register. */
     var schema: String = "5"
     fun snapshot(): ExportDir {
         write("incidents.jsonl", incidents.joinToString("") { "$it\n" })
         write("remedy-searches.jsonl", searches.joinToString("") { "$it\n" })
-        val instance = if (schema == "8") ""","instanceId":"mw-$runId"""" else ""
-        write("manifest.json", """{"schemaVersion":"$schema","runId":"$runId"$instance,"writtenAt":"x","virtualNow":"x","contractSemver":"0.9.0","counts":{"incidents":${incidents.size},"remedySearches":${searches.size}}}""")
+        val register = schema in Snapshot.FROM_10
+        if (register) write("revision-removals.jsonl", removals.joinToString("") { "$it\n" })
+        val instance = if (schema in Snapshot.FROM_8) ""","instanceId":"mw-$runId"""" else ""
+        val removalCount = if (register) ""","revisionRemovals":${removals.size}""" else ""
+        write("manifest.json", """{"schemaVersion":"$schema","runId":"$runId"$instance,"writtenAt":"x","virtualNow":"x","contractSemver":"0.9.0","counts":{"incidents":${incidents.size},"remedySearches":${searches.size}$removalCount}}""")
         return this
     }
 
@@ -60,6 +66,7 @@ internal class ExportDir(val dir: Path, var runId: String = "run-A") {
         fun lines(name: String) = Files.readAllLines(sample.resolve(name)).filter { it.isNotBlank() }
         incidents.clear(); incidents += lines("incidents.jsonl")
         searches.clear(); searches += lines("remedy-searches.jsonl")
+        removals.clear(); if (Files.exists(sample.resolve("revision-removals.jsonl"))) removals += lines("revision-removals.jsonl")
         val manifest = strictJson.readTree(Files.readString(sample.resolve("manifest.json")))
         schema = manifest.path("schemaVersion").textValue()
         runId = manifest.path("runId").textValue()
@@ -409,6 +416,22 @@ class EpisodeWatcherIntakeTest {
         val unknown = watch.logs(100).filter { it.kind == "LINK_UNKNOWN" }.map { strictJson.readTree(it.detailJson) }
         assertEquals(listOf("restart-3:incident-1", "restart-2:incident-1"), unknown.map { it.get("key").asText() })
         assertEquals(0, watch.logs(100).count { it.kind == "FOLDED" })
+    }
+
+    @Test fun `a schema 10 revision removal opens, joins and folds nothing - the bundle's symptoms are carried as without it`() {
+        val w = watcher()
+        export.copy("schema-10/run-3")
+        assertEquals(emptyList(), export.removals, "picasso's run-3 has an empty register")
+        // a revision removed incident-3's skipped successor in exec-2: incident-3 stays as it is
+        export.removals += """{"executionId":"exec-2","jobOrderId":"SEQ-2","robotId":"hum-04","fromVersion":1,"toVersion":2,""" +
+            """"removed":[{"unitId":"RACK-204.S03","state":"FAILED"}],"at":"2026-09-06T00:00:05Z","wallClockAt":"x"}"""
+        export.snapshot()
+        assertEquals(4, w.pollOnce().opened, "only the four incident lines; the removal is no symptom")
+        assertEquals((1..4).map { "ep:${export.runId}:incident-$it" }, signals.opened.map { it.first })
+        assertEquals(export.incidents, signals.opened.map { it.second.lineJson }, "each incident line carried verbatim")
+        assertEquals(emptyList(), signals.joined)
+        assertEquals(0, watch.logs(100).count { it.kind == "BROKEN" || it.kind == "FOLDED" })
+        assertEquals(0, w.pollOnce().opened, "nothing is left to carry: the register has no cursor of its own")
     }
 
     @Test fun `a schema 7 line carries no key - nothing is folded, whatever it says`() {

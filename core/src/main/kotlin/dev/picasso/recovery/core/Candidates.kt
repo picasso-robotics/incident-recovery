@@ -179,9 +179,9 @@ private class ReworkedAttempt(val robotId: String, val jobOrderId: String, val c
     }
 }
 
-/** Only from export schema 9: before it a search was offered as it was, and committed histories replay unchanged. */
+/** Only from export schema 9 ([Snapshot.FROM_9]): before it a search was offered as it was, and committed histories replay unchanged. */
 private fun reworkedAttempts(snapshot: Snapshot): List<ReworkedAttempt> {
-    if (snapshot.manifest.text("schemaVersion") != "9") return emptyList()
+    if (snapshot.manifest.text("schemaVersion") !in Snapshot.FROM_9) return emptyList()
     return snapshot.incidents.mapNotNull { i ->
         val robotId = i.text("robotId") ?: return@mapNotNull null
         val jobOrderId = i.text("jobOrderId") ?: return@mapNotNull null
