@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 
 /**
- * What a person's REWORK on an incident means for the episode (export schema "9", picasso §15.323; design §12
+ * What a person's REWORK on an incident means for the episode (export schema "9" and later, picasso §15.323; design §12
  * 구현(버전 9)). From "9" picasso takes a rework of any attempted failure, not only of a skipped pair: `resolution.decision
  * = REWORK` on an incident is a person's decision to issue that unit again. The recovery episode such incidents opened
  * has nothing left to find — no remedy is approved for a unit a person is already reissuing — so it is closed as "closed
@@ -66,15 +66,15 @@ fun reworkBasisOf(line: JsonNode): ReworkBasisRead {
 data class ReworkedIncident(val incidentId: String?, val incidentKey: String?, val attempt: Int?, val basis: ReworkBasisRead)
 
 /**
- * The incidents a person reworked when the episode is closed by rework, or null when it is not: export schema "9" only
- * (before it a REWORK decided a hold or a skipped pair, read as before — and committed histories replay unchanged), at
+ * The incidents a person reworked when the episode is closed by rework, or null when it is not: export schema "9" and
+ * later ([Snapshot.FROM_9]; before it a REWORK decided a hold or a skipped pair, read as before — and committed histories replay unchanged), at
  * least one incident line, and the latest line of every incident (`incidentKey`; a line without one is its own) decided
  * REWORK. One incident still undecided, or decided otherwise, keeps the episode going — a rework's next attempt that
  * failed again is such an incident (new key). Search lines do not hold it open: a person is reissuing the unit they were
  * searching a remedy for.
  */
 fun reworkClosure(snapshot: Snapshot): List<ReworkedIncident>? {
-    if (snapshot.manifest.text("schemaVersion") != "9" || snapshot.incidents.isEmpty()) return null
+    if (snapshot.manifest.text("schemaVersion") !in Snapshot.FROM_9 || snapshot.incidents.isEmpty()) return null
     val latest = LinkedHashMap<String, ObjectNode>()
     snapshot.incidents.forEachIndexed { index, line -> latest[incidentKeyOf(line)?.let { "key:$it" } ?: "line:$index"] = line }
     if (!latest.values.all { it.path("resolution").text("decision") == "REWORK" }) return null

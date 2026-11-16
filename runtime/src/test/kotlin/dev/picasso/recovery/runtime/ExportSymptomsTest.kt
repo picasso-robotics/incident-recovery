@@ -42,7 +42,7 @@ class ExportSymptomsTest {
         val r = assertIs<BundleRead.Ready>(ExportSymptoms.read(dir))
         assertEquals(9, r.lines.getValue(ExportKind.INCIDENT.file.name).size)
         assertEquals(4, r.lines.getValue(ExportKind.SEARCH.file.name).size)
-        Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"10\""))
+        Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"11\""))
         assertIs<BundleRead.Broken>(ExportSymptoms.read(dir))
         // schema 9 keeps schema 8's fields: a run-1 line of schema 5 under "9" is a changed format as well
         Files.writeString(manifest, five.replace("\"schemaVersion\":\"5\"", "\"schemaVersion\":\"9\""))
@@ -97,6 +97,55 @@ class ExportSymptomsTest {
         Files.writeString(incidents, good.replaceFirst("\"reworkBasis\":null", "\"reworkBasis\":{\"robotId\":\"hum-04\"}"))
         assertTrue("reworkBasis.readAt" in assertIs<BundleRead.Broken>(ExportSymptoms.read(dir)).why)
         Files.writeString(incidents, good)
+        assertIs<BundleRead.Ready>(ExportSymptoms.read(dir))
+    }
+
+    @Test fun `the committed schema 10 samples read as picasso wrote them - an empty register, the same digests as schema 9`() {
+        for (run in listOf("run-1", "run-2", "run-3", "run-5a", "run-5b")) {
+            val ten = assertIs<BundleRead.Ready>(ExportSymptoms.read(sample("schema-10/$run")), run)
+            val manifest = strictJson.readTree(ten.manifestJson)
+            assertEquals("10", manifest.path("schemaVersion").textValue())
+            assertEquals(0, manifest.path("counts").path("revisionRemovals").intValue(), run)
+            assertEquals(emptyList(), ten.lines.getValue(REVISION_REMOVALS.name), run)
+            val nine = assertIs<BundleRead.Ready>(ExportSymptoms.read(sample("schema-9/$run")), run)
+            assertTrue(REVISION_REMOVALS.name !in nine.lines, "a schema 9 bundle has no register: $run")
+            fun digests(r: BundleRead.Ready) = r.lines.getValue(ExportKind.INCIDENT.file.name).map { it.id to it.node.path("digest").textValue() }
+            assertEquals(digests(nine), digests(ten), "$run: schema 10 keeps schema 9's incident lines")
+            assertEquals(nine.lines.getValue(ExportKind.SEARCH.file.name).map { it.id }, ten.lines.getValue(ExportKind.SEARCH.file.name).map { it.id }, run)
+        }
+    }
+
+    /** A removal of a skipped successor in run-3's exec-2 (incident-3's unit), as picasso's `LedgerExport.revisionRemovalLine` writes it. */
+    private val removal = """{"executionId":"exec-2","jobOrderId":"SEQ-2","robotId":"hum-04","fromVersion":1,"toVersion":2,""" +
+        """"removed":[{"unitId":"RACK-204.S03","state":"FAILED"}],"at":"2026-09-06T00:00:05Z","wallClockAt":"2026-11-15T23:37:31Z"}"""
+
+    @Test fun `a schema 10 removal is read and checked, and changes no symptom`(@TempDir dir: Path) {
+        Files.list(sample("schema-10/run-3")).use { files -> files.forEach { Files.copy(it, dir.resolve(it.fileName)) } }
+        val manifest = dir.resolve("manifest.json")
+        val register = dir.resolve("revision-removals.jsonl")
+        val zero = Files.readString(manifest)
+        val empty = assertIs<BundleRead.Ready>(ExportSymptoms.read(dir))
+        Files.writeString(register, "$removal\n")
+        Files.writeString(manifest, zero.replace("\"revisionRemovals\":0", "\"revisionRemovals\":1"))
+        val one = assertIs<BundleRead.Ready>(ExportSymptoms.read(dir))
+        assertEquals(listOf("exec-2@2"), one.lines.getValue(REVISION_REMOVALS.name).map { it.id })
+        // the same symptoms, line for line: a removal is no incident and no search
+        for (kind in ExportKind.entries) {
+            fun events(r: BundleRead.Ready) = r.lines.getValue(kind.file.name).map { ExportSymptoms.symptom(kind, r, it, 0)!!.let { s -> s.eventId to s.lineJson } }
+            assertEquals(events(empty), events(one), kind.name)
+        }
+        // a line out of shape, a repeated (execution, toVersion), a count without its file, no count at all: broken
+        Files.writeString(register, removal.replace("\"state\":\"FAILED\"", "\"state\":\"DONE\"") + "\n")
+        assertTrue("revision-removals.jsonl line 1: removed[0]" in assertIs<BundleRead.Broken>(ExportSymptoms.read(dir)).why)
+        Files.writeString(register, "$removal\n$removal\n")
+        Files.writeString(manifest, zero.replace("\"revisionRemovals\":0", "\"revisionRemovals\":2"))
+        assertTrue("repeats executionId and toVersion 'exec-2@2'" in assertIs<BundleRead.Broken>(ExportSymptoms.read(dir)).why)
+        Files.delete(register)
+        assertIs<BundleRead.Broken>(ExportSymptoms.read(dir))
+        Files.writeString(manifest, zero.replace(",\"revisionRemovals\":0", ""))
+        assertTrue("counts.revisionRemovals" in assertIs<BundleRead.Broken>(ExportSymptoms.read(dir)).why)
+        // counted 0, the register is not read at all — as picasso's empty file
+        Files.writeString(manifest, zero)
         assertIs<BundleRead.Ready>(ExportSymptoms.read(dir))
     }
 

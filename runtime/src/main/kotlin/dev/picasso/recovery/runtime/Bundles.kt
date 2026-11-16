@@ -9,8 +9,18 @@ import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
-/** One jsonl file of a bundle: its [name], its count's key in the manifest's `counts`, and the field that names a line. */
-data class BundleFile(val name: String, val countKey: String, val idField: String)
+/**
+ * One jsonl file of a bundle: its [name], its count's key in the manifest's `counts`, and the field that names a line
+ * ([idField]). [idOf] reads a line's name — by default the non-blank string [idField]; a file whose lines are named by
+ * more than one field (picasso's revision-removal register: execution and `toVersion`) gives its own, and [idField] then
+ * only says what is missing when it returns null.
+ */
+data class BundleFile(
+    val name: String,
+    val countKey: String,
+    val idField: String,
+    val idOf: (JsonNode) -> String? = { node -> node.get(idField)?.takeIf { it.isTextual }?.textValue()?.takeIf { it.isNotBlank() } },
+)
 
 /** One line as read: [position] is 1-based among the file's non-blank lines; [text] is the line exactly as written. */
 class BundleLine(val position: Int, val id: String, val text: String, val node: JsonNode)
@@ -54,6 +64,15 @@ object Bundles {
         schemaVersions: Set<String>,
         files: List<BundleFile>,
         readText: (Path) -> String = Files::readString,
+    ): BundleRead = read(dir, runIdField, schemaVersions, { files }, readText)
+
+    /** As above, with the files the manifest's `schemaVersion` says the bundle has ([filesOf], called with a known version). */
+    fun read(
+        dir: Path,
+        runIdField: String,
+        schemaVersions: Set<String>,
+        filesOf: (String) -> List<BundleFile>,
+        readText: (Path) -> String = Files::readString,
     ): BundleRead {
         val manifestFile = dir.resolve(MANIFEST)
         val manifestSize = try { Files.size(manifestFile) } catch (e: NoSuchFileException) {
@@ -84,7 +103,7 @@ object Bundles {
         val counts = manifest.get("counts")?.takeIf { it.isObject } ?: return BundleRead.Broken("$MANIFEST in $dir has no counts")
 
         val lines = LinkedHashMap<String, List<BundleLine>>()
-        for (file in files) {
+        for (file in filesOf(schema!!)) {
             val count = counts.get(file.countKey)?.takeIf { it.isInt && it.intValue() >= 0 }?.intValue()
                 ?: return BundleRead.Broken("$MANIFEST in $dir: counts.${file.countKey} is not a count")
             val path = dir.resolve(file.name)
@@ -110,7 +129,7 @@ object Bundles {
                 if (line.startsWith(Char(0xFEFF))) return broken("$where starts with a UTF-8 BOM")
                 val parsed = parse(line)
                 val node = parsed.node ?: return broken("$where ${parsed.notObject}")
-                val id = node.textOf(file.idField) ?: return broken("$where has no ${file.idField}")
+                val id = file.idOf(node) ?: return broken("$where has no ${file.idField}")
                 if (!seen.add(id)) return broken("$where repeats ${file.idField} '$id'")
                 read += BundleLine(i + 1, id, line, node)
             }
